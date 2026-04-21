@@ -134,6 +134,9 @@ jobs:
           notarizationUser: ${{ secrets.MACOS_NOTARIZATION_USERNAME }}
           notarizationPassword: ${{ secrets.MACOS_NOTARIZATION_PASSWORD }}
 
+      - name: Install System Dependencies
+        run: brew install lame libshout
+
       - name: Build Plugin 🧱
         uses: ./.github/actions/build-plugin
         with:
@@ -211,6 +214,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.os }}-ccache-x86_64-
 
+      - name: Install System Dependencies
+        run: sudo apt-get update && sudo apt-get install -y libmp3lame-dev libshout3-dev
+
       - name: Build Plugin 🧱
         uses: ./.github/actions/build-plugin
         with:
@@ -279,7 +285,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          vcpkg install mp3lame:x64-windows libshout:x64-windows
+          vcpkg install mp3lame:x64-windows libshout:x64-windows --allow-unsupported
 
       - name: Build Plugin 🧱
         uses: ./.github/actions/build-plugin

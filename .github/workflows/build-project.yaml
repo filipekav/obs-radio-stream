@@ -259,6 +259,8 @@ jobs:
     name: Build for Windows 🪟
     runs-on: windows-2022
     needs: check-event
+    env:
+      CMAKE_PREFIX_PATH: "C:/vcpkg/installed/x64-windows"
     defaults:
       run:
         shell: pwsh

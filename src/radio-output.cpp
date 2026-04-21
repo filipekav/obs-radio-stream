@@ -42,10 +42,10 @@ static void radio_output_update(void* data, obs_data_t* settings) {
     radio_output_data* ctx = static_cast<radio_output_data*>(data);
     
     ctx->host = obs_data_get_string(settings, "server_url");
-    ctx->port = obs_data_get_int(settings, "server_port");
+    ctx->port = static_cast<int>(obs_data_get_int(settings, "server_port"));
     ctx->mount = obs_data_get_string(settings, "mountpoint");
     ctx->pass = obs_data_get_string(settings, "password");
-    ctx->bitrate = obs_data_get_int(settings, "bitrate");
+    ctx->bitrate = static_cast<int>(obs_data_get_int(settings, "bitrate"));
     
     if (ctx->port == 0) ctx->port = 8000;
     if (ctx->bitrate == 0) ctx->bitrate = 128;
@@ -78,8 +78,8 @@ static bool radio_output_start(void* data) {
     size_t sample_rate = audio_output_get_sample_rate(audio);
     size_t channels = audio_output_get_channels(audio);
 
-    lame_set_in_samplerate(ctx->lame, sample_rate);
-    lame_set_num_channels(ctx->lame, channels);
+    lame_set_in_samplerate(ctx->lame, static_cast<int>(sample_rate));
+    lame_set_num_channels(ctx->lame, static_cast<int>(channels));
     lame_set_brate(ctx->lame, ctx->bitrate);
     lame_set_quality(ctx->lame, 2); // 2 is high quality, 0 is best
     lame_init_params(ctx->lame);
@@ -149,13 +149,13 @@ static void radio_output_raw_audio(void* data, struct audio_data* frames) {
         }
     }
 
-    int mp3_buf_size = 1.25 * frames_count * channels + 7200;
+    int mp3_buf_size = static_cast<int>(1.25 * frames_count * channels + 7200);
     std::vector<unsigned char> mp3_buffer_vec(mp3_buf_size);
 
     int encoded_bytes = lame_encode_buffer_interleaved(
         ctx->lame,
         ctx->pcm_buffer.data(),
-        frames_count,
+        static_cast<int>(frames_count),
         mp3_buffer_vec.data(),
         mp3_buf_size
     );

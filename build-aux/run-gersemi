@@ -1,2 +1,2 @@
 #!/usr/bin/env zsh
-"$(dirname "$0")/.run-format.zsh" "$@"
+FORMATTER_NAME="gersemi" "$(dirname "$0")/.run-format.zsh" "$@"

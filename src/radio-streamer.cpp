@@ -1,48 +1,33 @@
 #include "radio-streamer.hpp"
 #include <obs-module.h>
+#include <QTcpSocket>
+#include <QString>
+#include <QByteArray>
+#include <QAbstractSocket>
 
 RadioStreamer::RadioStreamer() {
-    shout_init();
 }
 
 RadioStreamer::~RadioStreamer() {
     disconnect();
-    shout_shutdown();
 }
 
 bool RadioStreamer::connect(const std::string& host, int port, const std::string& mount,
                             const std::string& user, const std::string& pass, int bitrate) {
     if (connected.load()) return true;
 
-    shout = shout_new();
-    if (!shout) {
-        blog(LOG_ERROR, "[Radio] Falha ao alocar shout_t");
-        return false;
-    }
-
-    shout_set_host(shout, host.c_str());
-    shout_set_port(shout, port);
-    shout_set_mount(shout, mount.c_str());
-    shout_set_user(shout, user.c_str());
-    shout_set_password(shout, pass.c_str());
-    shout_set_format(shout, SHOUT_FORMAT_MP3);
-    shout_set_protocol(shout, SHOUT_PROTOCOL_HTTP);
-    
-    std::string bitrate_str = std::to_string(bitrate);
-    shout_set_audio_info(shout, SHOUT_AI_BITRATE, bitrate_str.c_str());
-
-    if (shout_open(shout) != SHOUTERR_SUCCESS) {
-        blog(LOG_ERROR, "[Radio] Falha ao conectar ao Icecast: %s", shout_get_error(shout));
-        shout_free(shout);
-        shout = nullptr;
-        return false;
-    }
+    m_host = host;
+    m_port = port;
+    m_mount = mount;
+    m_user = user;
+    m_pass = pass;
+    m_bitrate = bitrate;
 
     connected = true;
     running = true;
     thread_handle = std::thread(&RadioStreamer::worker_thread, this);
 
-    blog(LOG_INFO, "[Radio] Conectado ao servidor Icecast %s:%d%s", host.c_str(), port, mount.c_str());
+    blog(LOG_INFO, "[Radio] Iniciando conexão ao servidor Icecast %s:%d%s", host.c_str(), port, mount.c_str());
     return true;
 }
 
@@ -56,12 +41,6 @@ void RadioStreamer::disconnect() {
         thread_handle.join();
     }
 
-    if (shout) {
-        shout_close(shout);
-        shout_free(shout);
-        shout = nullptr;
-    }
-    
     connected = false;
     
     std::lock_guard<std::mutex> lock(queue_mutex);
@@ -83,6 +62,36 @@ void RadioStreamer::push_audio(const uint8_t* data, size_t size) {
 }
 
 void RadioStreamer::worker_thread() {
+    QTcpSocket socket;
+    
+    socket.connectToHost(QString::fromStdString(m_host), m_port);
+    if (!socket.waitForConnected(5000)) {
+        blog(LOG_ERROR, "[Radio] Erro: Host não alcançado");
+        connected = false;
+        running = false;
+        return;
+    }
+
+    QString auth_str = QString::fromStdString(m_user + ":" + m_pass);
+    QByteArray auth_b64 = auth_str.toUtf8().toBase64();
+    
+    QString mt = QString::fromStdString(m_mount);
+    if (!mt.startsWith("/")) {
+        mt = "/" + mt;
+    }
+
+    QString header = QString("PUT %1 HTTP/1.0\r\n"
+                             "Authorization: Basic %2\r\n"
+                             "Content-Type: audio/mpeg\r\n"
+                             "Ice-Name: OBS Radio Stream\r\n"
+                             "Ice-Bitrate: %3\r\n\r\n")
+                             .arg(mt)
+                             .arg(QString(auth_b64))
+                             .arg(m_bitrate);
+
+    socket.write(header.toUtf8());
+    socket.waitForBytesWritten();
+
     while (running.load()) {
         std::vector<uint8_t> chunk;
         
@@ -99,14 +108,17 @@ void RadioStreamer::worker_thread() {
         }
 
         if (!chunk.empty()) {
-            int ret = shout_send(shout, chunk.data(), chunk.size());
-            if (ret != SHOUTERR_SUCCESS) {
-                blog(LOG_ERROR, "[Radio] Erro shout_send: %s", shout_get_error(shout));
-                // Parar se der erro
-                running = false;
-                connected = false;
+            socket.write((const char*)chunk.data(), chunk.size());
+            if (!socket.waitForBytesWritten(3000)) {
+                blog(LOG_ERROR, "[Radio] Erro na transmissão");
+                break;
             }
-            shout_sync(shout);
         }
     }
+    
+    socket.disconnectFromHost();
+    if (socket.state() != QAbstractSocket::UnconnectedState) {
+         socket.waitForDisconnected(1000);
+    }
 }
+

@@ -22,8 +22,8 @@ if(ENABLE_FRONTEND_API)
 endif()
 
 if(ENABLE_QT)
-  find_package(Qt6 COMPONENTS Widgets Core REQUIRED)
-  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets)
+  find_package(Qt6 COMPONENTS Widgets Core Network REQUIRED)
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets Qt6::Network)
   target_compile_options(
     ${CMAKE_PROJECT_NAME}
     PRIVATE $<$<C_COMPILER_ID:Clang,AppleClang>:-Wno-quoted-include-in-framework-header -Wno-comma>
@@ -37,17 +37,12 @@ endif()
 find_path(LAME_INCLUDE_DIR NAMES lame/lame.h)
 find_library(LAME_LIBRARY NAMES mp3lame lame)
 
-find_path(SHOUT_INCLUDE_DIR NAMES shout/shout.h)
-find_library(SHOUT_LIBRARY NAMES shout)
-
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${LAME_INCLUDE_DIR}
-    ${SHOUT_INCLUDE_DIR}
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     ${LAME_LIBRARY}
-    ${SHOUT_LIBRARY}
 )
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE

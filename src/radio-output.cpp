@@ -24,6 +24,7 @@ static const char* radio_output_get_name(void*) {
 }
 
 static void* radio_output_create(obs_data_t* settings, obs_output_t* output) {
+    (void)settings;
     radio_output_data* data = new radio_output_data();
     data->output = output;
     data->streamer = new RadioStreamer();
@@ -94,7 +95,7 @@ static bool radio_output_start(void* data) {
     
     obs_output_set_audio_conversion(ctx->output, &aci);
     
-    if (!obs_output_begin_data_capture(ctx->output, OBS_NO_VIDEO)) {
+    if (!obs_output_begin_data_capture(ctx->output, 0)) {
         ctx->streamer->disconnect();
         lame_close(ctx->lame);
         ctx->lame = nullptr;
@@ -106,6 +107,7 @@ static bool radio_output_start(void* data) {
 }
 
 static void radio_output_stop(void* data, uint64_t ts) {
+    (void)ts;
     auto* ctx = static_cast<radio_output_data*>(data);
     
     obs_output_end_data_capture(ctx->output);

@@ -7,7 +7,6 @@
 #include <condition_variable>
 #include <atomic>
 #include <queue>
-#include <shout/shout.h>
 
 class RadioStreamer {
 public:
@@ -25,7 +24,13 @@ public:
 private:
     void worker_thread();
 
-    shout_t* shout = nullptr;
+    std::string m_host;
+    int m_port;
+    std::string m_mount;
+    std::string m_user;
+    std::string m_pass;
+    int m_bitrate;
+
     std::atomic<bool> connected{false};
     std::atomic<bool> running{false};
 
@@ -35,3 +40,4 @@ private:
     std::condition_variable queue_cv;
     std::queue<std::vector<uint8_t>> audio_queue;
 };
+

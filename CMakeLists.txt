@@ -34,16 +34,15 @@ if(ENABLE_QT)
   )
 endif()
 
-find_path(LAME_INCLUDE_DIR NAMES lame/lame.h)
-find_library(LAME_LIBRARY NAMES mp3lame lame)
-
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    ${LAME_INCLUDE_DIR}
-)
-
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
-    ${LAME_LIBRARY}
-)
+find_package(mp3lame CONFIG)
+if(mp3lame_FOUND)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE mp3lame::mp3lame)
+else()
+    find_path(LAME_INCLUDE_DIR NAMES lame/lame.h)
+    find_library(LAME_LIBRARY NAMES mp3lame lame)
+    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_INCLUDE_DIR})
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_LIBRARY})
+endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     src/plugin-main.cpp

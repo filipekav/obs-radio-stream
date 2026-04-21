@@ -9,6 +9,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QTimer>
+#include <QSettings>
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 
@@ -88,46 +89,30 @@ void RadioDock::initUI() {
 }
 
 void RadioDock::loadSettings() {
-    obs_data_t* settings = obs_frontend_get_persistent_data();
-    if (!settings) return;
-
-    obs_data_t* d = obs_data_get_obj(settings, "icecast_radio_settings");
+    QSettings settings("OBSPlugins", "RadioStreamer");
     
-    if (d) {
-        urlInput->setText(obs_data_get_string(d, "server_url"));
-        
-        int port = obs_data_get_int(d, "server_port");
-        if (port) portInput->setValue(port);
-        
-        const char* mount = obs_data_get_string(d, "mountpoint");
-        if (mount && strlen(mount) > 0) mountInput->setText(mount);
-        
-        passInput->setText(obs_data_get_string(d, "password"));
-        
-        int br = obs_data_get_int(d, "bitrate");
-        if (br) bitrateInput->setCurrentText(QString::number(br));
-        
-        obs_data_release(d);
-    }
-    obs_data_release(settings);
+    urlInput->setText(settings.value("server_url").toString());
+    
+    int port = settings.value("server_port", 8000).toInt();
+    portInput->setValue(port);
+    
+    QString mount = settings.value("mountpoint", "/stream").toString();
+    mountInput->setText(mount);
+    
+    passInput->setText(settings.value("password").toString());
+    
+    int br = settings.value("bitrate", 128).toInt();
+    bitrateInput->setCurrentText(QString::number(br));
 }
 
 void RadioDock::saveSettings() {
-    obs_data_t* settings = obs_frontend_get_persistent_data();
-    if (!settings) return;
+    QSettings settings("OBSPlugins", "RadioStreamer");
 
-    obs_data_t* d = obs_data_create();
-
-    obs_data_set_string(d, "server_url", urlInput->text().toUtf8().constData());
-    obs_data_set_int(d, "server_port", portInput->value());
-    obs_data_set_string(d, "mountpoint", mountInput->text().toUtf8().constData());
-    obs_data_set_string(d, "password", passInput->text().toUtf8().constData());
-    obs_data_set_int(d, "bitrate", bitrateInput->currentText().toInt());
-
-    obs_data_set_obj(settings, "icecast_radio_settings", d);
-    
-    obs_data_release(d);
-    obs_data_release(settings);
+    settings.setValue("server_url", urlInput->text());
+    settings.setValue("server_port", portInput->value());
+    settings.setValue("mountpoint", mountInput->text());
+    settings.setValue("password", passInput->text());
+    settings.setValue("bitrate", bitrateInput->currentText().toInt());
 }
 
 void RadioDock::onStartClicked() {

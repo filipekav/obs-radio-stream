@@ -1,54 +1,60 @@
-cmake_minimum_required(VERSION 3.16...3.24)
-project(obs-radio-stream VERSION 1.0.0)
+cmake_minimum_required(VERSION 3.28...3.30)
 
-# Set up Qt GUI specifics
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTORCC ON)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCOPE)
 
-# Find Qt
-find_package(Qt6 COMPONENTS Core Widgets REQUIRED)
+project(${_name} VERSION ${_version})
 
-# Find OBS
+set(ENABLE_FRONTEND_API ON)
+set(ENABLE_QT ON)
+
+include(compilerconfig)
+include(defaults)
+include(helpers)
+
+add_library(${CMAKE_PROJECT_NAME} MODULE)
+
 find_package(libobs REQUIRED)
-find_package(obs-frontend-api REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
 
-# LAME and SHOUT config
-# Allows fallback configuration path
+if(ENABLE_FRONTEND_API)
+  find_package(obs-frontend-api REQUIRED)
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::obs-frontend-api)
+endif()
+
+if(ENABLE_QT)
+  find_package(Qt6 COMPONENTS Widgets Core REQUIRED)
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets)
+  target_compile_options(
+    ${CMAKE_PROJECT_NAME}
+    PRIVATE $<$<C_COMPILER_ID:Clang,AppleClang>:-Wno-quoted-include-in-framework-header -Wno-comma>
+  )
+  set_target_properties(
+    ${CMAKE_PROJECT_NAME}
+    PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC ON
+  )
+endif()
+
 find_path(LAME_INCLUDE_DIR NAMES lame/lame.h)
 find_library(LAME_LIBRARY NAMES mp3lame lame)
 
 find_path(SHOUT_INCLUDE_DIR NAMES shout/shout.h)
 find_library(SHOUT_LIBRARY NAMES shout)
 
-if (NOT LAME_INCLUDE_DIR OR NOT LAME_LIBRARY)
-    message(WARNING "LAME not found automatically. Make sure to specify -DCMAKE_PREFIX_PATH or set LAME_INCLUDE_DIR and LAME_LIBRARY directly.")
-endif()
-
-if (NOT SHOUT_INCLUDE_DIR OR NOT SHOUT_LIBRARY)
-    message(WARNING "libshout not found automatically. Make sure to specify -DCMAKE_PREFIX_PATH or set SHOUT_INCLUDE_DIR and SHOUT_LIBRARY directly.")
-endif()
-
-add_library(${PROJECT_NAME} MODULE
-    plugin-main.cpp
-    radio-output.cpp
-    radio-streamer.cpp
-    radio-ui.cpp
-)
-
-set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
-
-target_include_directories(${PROJECT_NAME} PRIVATE
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${LAME_INCLUDE_DIR}
     ${SHOUT_INCLUDE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    OBS::libobs
-    OBS::obs-frontend-api
-    Qt6::Core
-    Qt6::Widgets
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     ${LAME_LIBRARY}
     ${SHOUT_LIBRARY}
 )
+
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    src/plugin-main.cpp
+    src/radio-output.cpp
+    src/radio-streamer.cpp
+    src/radio-ui.cpp
+)
+
+set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})

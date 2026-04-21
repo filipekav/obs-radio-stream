@@ -279,7 +279,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          vcpkg install lame:x64-windows libshout:x64-windows
+          vcpkg install mp3lame:x64-windows libshout:x64-windows
 
       - name: Build Plugin 🧱
         uses: ./.github/actions/build-plugin

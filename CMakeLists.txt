@@ -81,15 +81,17 @@ if(WIN32)
     endif()
   endif()
 
-  if(SHOUT_LIBRARY)
-    get_filename_component(SHOUT_LIB_DIR "${SHOUT_LIBRARY}" DIRECTORY)
+  if(SHOUT_LIBRARY AND SHOUT_INCLUDE_DIR)
+    get_filename_component(SHOUT_PREFIX "${SHOUT_INCLUDE_DIR}" DIRECTORY)
     find_file(SHOUT_DLL_PATH
       NAMES libshout.dll shout.dll
-      PATHS "${SHOUT_LIB_DIR}/../bin"
+      PATHS "${SHOUT_PREFIX}/bin"
       NO_DEFAULT_PATH
     )
     if(SHOUT_DLL_PATH)
       list(APPEND EXTERNAL_RUNTIME_DLLS "${SHOUT_DLL_PATH}")
+    else()
+      message(WARNING "Failed to locate libshout.dll or shout.dll in ${SHOUT_PREFIX}/bin")
     endif()
   endif()
 

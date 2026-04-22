@@ -53,18 +53,26 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
 
-if(WIN32 AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.21)
-    # 1. POST_BUILD: Copia as DLLs dinâmicas (libmp3lame, libshout, etc) para a pasta de saída do build
-    # Isso resolve o problema ao rodar o OBS localmente a partir da pasta de build.
-    add_custom_command(
-        TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_RUNTIME_DLLS:${CMAKE_PROJECT_NAME}>
-            $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>
-        COMMAND_EXPAND_LISTS
-    )
+if(WIN32)
+  # Lista explícita das DLLs de terceiros que desejamos empacotar.
+  # Descomente e ajuste a linha do libshout com o nome exato do target que você usa.
+  set(EXTERNAL_RUNTIME_DLLS
+    "$<$<TARGET_EXISTS:mp3lame::mp3lame>:$<TARGET_FILE:mp3lame::mp3lame>>"
+    # "$<$<TARGET_EXISTS:shout::shout>:$<TARGET_FILE:shout::shout>>"
+  )
 
-    # 2. INSTALL: Garante que as DLLs entrem no ZIP/pacote final quando gerar a release
-    install(FILES $<TARGET_RUNTIME_DLLS:${CMAKE_PROJECT_NAME}>
-            DESTINATION "obs-plugins/64bit")
+  # 1. POST_BUILD: Copia apenas as DLLs especificadas para a pasta local de saída
+  add_custom_command(
+    TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+      ${EXTERNAL_RUNTIME_DLLS}
+      "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>"
+    COMMAND_EXPAND_LISTS
+  )
+
+  # 2. INSTALL: Empacota especificamente e apenas as DLLs externas no ZIP
+  install(
+    FILES ${EXTERNAL_RUNTIME_DLLS}
+    DESTINATION "obs-plugins/64bit"
+  )
 endif()

@@ -52,3 +52,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
+
+if(WIN32)
+    # Copy DLL dependencies (e.g. libmp3lame.dll) to the output package
+    install(FILES $<TARGET_RUNTIME_DLLS:${CMAKE_PROJECT_NAME}>
+            DESTINATION "${CMAKE_PROJECT_NAME}/bin/64bit")
+endif()

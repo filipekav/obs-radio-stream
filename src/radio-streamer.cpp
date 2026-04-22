@@ -66,7 +66,8 @@ void RadioStreamer::worker_thread() {
     
     socket.connectToHost(QString::fromStdString(m_host), m_port);
     if (!socket.waitForConnected(5000)) {
-        blog(LOG_ERROR, "[Radio] Erro: Host não alcançado");
+        blog(LOG_ERROR, "[Radio] Erro de conexão com %s:%d - %s", 
+             m_host.c_str(), m_port, socket.errorString().toStdString().c_str());
         connected = false;
         running = false;
         return;
@@ -89,8 +90,36 @@ void RadioStreamer::worker_thread() {
                              .arg(QString(auth_b64))
                              .arg(m_bitrate);
 
+    blog(LOG_INFO, "[Radio] Enviando Header Handshake para Icecast:\n%s", header.toStdString().c_str());
+
     socket.write(header.toUtf8());
-    socket.waitForBytesWritten();
+    if (!socket.waitForBytesWritten(3000)) {
+        blog(LOG_ERROR, "[Radio] Erro ao enviar Header Handshake: %s", socket.errorString().toStdString().c_str());
+        connected = false;
+        running = false;
+        return;
+    }
+
+    // Leitura e validação da resposta do servidor
+    if (!socket.waitForReadyRead(5000)) {
+        blog(LOG_ERROR, "[Radio] Timeout aguardando resposta do servidor Icecast: %s", socket.errorString().toStdString().c_str());
+        connected = false;
+        running = false;
+        return;
+    }
+
+    QByteArray response = socket.readAll();
+    QString responseStr = QString::fromUtf8(response);
+    blog(LOG_INFO, "[Radio] Resposta Recebida do Servidor:\n%s", responseStr.toStdString().c_str());
+
+    if (!responseStr.contains("200 OK", Qt::CaseInsensitive) && 
+        !responseStr.contains("100 Continue", Qt::CaseInsensitive)) {
+        blog(LOG_ERROR, "[Radio] Acesso negado ou erro no handshake do servidor. Abortando transmissão.");
+        connected = false;
+        running = false;
+        socket.disconnectFromHost();
+        return;
+    }
 
     while (running.load()) {
         std::vector<uint8_t> chunk;
@@ -110,7 +139,7 @@ void RadioStreamer::worker_thread() {
         if (!chunk.empty()) {
             socket.write((const char*)chunk.data(), chunk.size());
             if (!socket.waitForBytesWritten(3000)) {
-                blog(LOG_ERROR, "[Radio] Erro na transmissão");
+                blog(LOG_ERROR, "[Radio] Dropando audio. Falha na escrita do socket: %s", socket.errorString().toStdString().c_str());
                 break;
             }
         }

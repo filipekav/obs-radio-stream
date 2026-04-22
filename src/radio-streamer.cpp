@@ -83,6 +83,7 @@ void RadioStreamer::worker_thread() {
         connected = false;
         running = false;
         if (on_disconnect_callback) on_disconnect_callback();
+        socket.abort();
         return;
     }
 
@@ -134,6 +135,7 @@ void RadioStreamer::worker_thread() {
         running = false;
         socket.disconnectFromHost();
         if (on_disconnect_callback) on_disconnect_callback();
+        socket.abort();
         return;
     }
 

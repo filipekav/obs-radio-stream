@@ -93,7 +93,7 @@ static bool radio_output_start(void* data) {
 
     ctx->streamer->on_disconnect_callback = [output = ctx->output]() {
         std::thread([output]() {
-            obs_output_signal_stop(output, OBS_OUTPUT_DISCONNECTED);
+            obs_output_signal_stop(output, OBS_OUTPUT_ERROR);
         }).detach();
     };
 

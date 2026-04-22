@@ -91,8 +91,10 @@ static bool radio_output_start(void* data) {
     lame_set_quality(ctx->lame, 2); // 2 is high quality, 0 is best
     lame_init_params(ctx->lame);
 
-    ctx->streamer->on_disconnect_callback = [ctx]() {
-        obs_output_signal_stop(ctx->output, OBS_OUTPUT_DISCONNECTED);
+    ctx->streamer->on_disconnect_callback = [output = ctx->output]() {
+        std::thread([output]() {
+            obs_output_signal_stop(output, OBS_OUTPUT_DISCONNECTED);
+        }).detach();
     };
 
     if (!ctx->streamer->connect(ctx->host, ctx->port, ctx->mount, ctx->user, ctx->pass, ctx->bitrate, ctx->record_locally, ctx->record_path)) {

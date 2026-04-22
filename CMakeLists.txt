@@ -66,5 +66,5 @@ if(WIN32 AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.21)
 
     # 2. INSTALL: Garante que as DLLs entrem no ZIP/pacote final quando gerar a release
     install(FILES $<TARGET_RUNTIME_DLLS:${CMAKE_PROJECT_NAME}>
-            DESTINATION "${CMAKE_PROJECT_NAME}/bin/64bit")
+            DESTINATION "obs-plugins/64bit")
 endif()

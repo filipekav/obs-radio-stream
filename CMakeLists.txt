@@ -82,10 +82,13 @@ if(WIN32)
   endif()
 
   if(SHOUT_LIBRARY)
-    string(REGEX REPLACE "\\.lib$" ".dll" SHOUT_DLL_PATH "${SHOUT_LIBRARY}")
-    string(REPLACE "/lib/" "/bin/" SHOUT_DLL_PATH "${SHOUT_DLL_PATH}")
-    string(REPLACE "\\lib\\" "\\bin\\" SHOUT_DLL_PATH "${SHOUT_DLL_PATH}")
-    if(EXISTS "${SHOUT_DLL_PATH}")
+    get_filename_component(SHOUT_LIB_DIR "${SHOUT_LIBRARY}" DIRECTORY)
+    find_file(SHOUT_DLL_PATH
+      NAMES libshout.dll shout.dll
+      PATHS "${SHOUT_LIB_DIR}/../bin"
+      NO_DEFAULT_PATH
+    )
+    if(SHOUT_DLL_PATH)
       list(APPEND EXTERNAL_RUNTIME_DLLS "${SHOUT_DLL_PATH}")
     endif()
   endif()

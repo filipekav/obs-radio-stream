@@ -19,8 +19,7 @@ public:
     ~RadioDock();
 
 private slots:
-    void onStartClicked();
-    void onStopClicked();
+    void onToggleClicked();
     void updateStatus();
 
 private:
@@ -31,11 +30,11 @@ private:
     QLineEdit* urlInput;
     QSpinBox* portInput;
     QLineEdit* mountInput;
+    QLineEdit* userInput;
     QLineEdit* passInput;
     QComboBox* bitrateInput;
 
-    QPushButton* startBtn;
-    QPushButton* stopBtn;
+    QPushButton* toggleBtn;
     QLabel* statusLabel;
 
     QTimer* statusTimer;

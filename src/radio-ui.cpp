@@ -54,6 +54,10 @@ void RadioDock::initUI() {
     mountInput->setText("/stream");
     form->addRow("Ponto de Montagem:", mountInput);
     
+    userInput = new QLineEdit();
+    userInput->setText("source");
+    form->addRow("Usuário:", userInput);
+    
     passInput = new QLineEdit();
     passInput->setEchoMode(QLineEdit::Password);
     form->addRow("Senha:", passInput);
@@ -65,13 +69,9 @@ void RadioDock::initUI() {
 
     layout->addLayout(form);
 
-    startBtn = new QPushButton("Iniciar Transmissão de Rádio");
-    startBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
-    stopBtn = new QPushButton("Parar Transmissão");
-    stopBtn->setStyleSheet("background-color: #dc3545; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
-    
-    layout->addWidget(startBtn);
-    layout->addWidget(stopBtn);
+    toggleBtn = new QPushButton("Iniciar Transmissão de Rádio");
+    toggleBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+    layout->addWidget(toggleBtn);
 
     statusLabel = new QLabel("Status: Offline");
     statusLabel->setAlignment(Qt::AlignCenter);
@@ -84,8 +84,7 @@ void RadioDock::initUI() {
     layout->addStretch();
     setWidget(widget);
 
-    connect(startBtn, &QPushButton::clicked, this, &RadioDock::onStartClicked);
-    connect(stopBtn, &QPushButton::clicked, this, &RadioDock::onStopClicked);
+    connect(toggleBtn, &QPushButton::clicked, this, &RadioDock::onToggleClicked);
 }
 
 void RadioDock::loadSettings() {
@@ -99,6 +98,8 @@ void RadioDock::loadSettings() {
     QString mount = settings.value("mountpoint", "/stream").toString();
     mountInput->setText(mount);
     
+    userInput->setText(settings.value("username", "source").toString());
+    
     passInput->setText(settings.value("password").toString());
     
     int br = settings.value("bitrate", 128).toInt();
@@ -111,42 +112,49 @@ void RadioDock::saveSettings() {
     settings.setValue("server_url", urlInput->text());
     settings.setValue("server_port", portInput->value());
     settings.setValue("mountpoint", mountInput->text());
+    settings.setValue("username", userInput->text());
     settings.setValue("password", passInput->text());
     settings.setValue("bitrate", bitrateInput->currentText().toInt());
 }
 
-void RadioDock::onStartClicked() {
-    if (obs_output_active(output)) return;
-    
-    saveSettings();
+void RadioDock::onToggleClicked() {
+    if (obs_output_active(output)) {
+        obs_output_stop(output);
+    } else {
+        saveSettings();
 
-    obs_data_t* out_settings = obs_data_create();
-    obs_data_set_string(out_settings, "server_url", urlInput->text().toUtf8().constData());
-    obs_data_set_int(out_settings, "server_port", portInput->value());
-    obs_data_set_string(out_settings, "mountpoint", mountInput->text().toUtf8().constData());
-    obs_data_set_string(out_settings, "password", passInput->text().toUtf8().constData());
-    obs_data_set_int(out_settings, "bitrate", bitrateInput->currentText().toInt());
-    
-    obs_output_update(output, out_settings);
-    obs_data_release(out_settings);
-    
-    obs_output_start(output);
-}
-
-void RadioDock::onStopClicked() {
-    obs_output_stop(output);
+        obs_data_t* out_settings = obs_data_create();
+        obs_data_set_string(out_settings, "server_url", urlInput->text().toUtf8().constData());
+        obs_data_set_int(out_settings, "server_port", portInput->value());
+        obs_data_set_string(out_settings, "mountpoint", mountInput->text().toUtf8().constData());
+        obs_data_set_string(out_settings, "username", userInput->text().toUtf8().constData());
+        obs_data_set_string(out_settings, "password", passInput->text().toUtf8().constData());
+        obs_data_set_int(out_settings, "bitrate", bitrateInput->currentText().toInt());
+        
+        obs_output_update(output, out_settings);
+        obs_data_release(out_settings);
+        
+        obs_output_start(output);
+    }
 }
 
 void RadioDock::updateStatus() {
     if (!output) return;
 
     bool active = obs_output_active(output);
-    startBtn->setEnabled(!active);
-    stopBtn->setEnabled(active);
+    
+    if (active) {
+        toggleBtn->setText("Parar Transmissão");
+        toggleBtn->setStyleSheet("background-color: #dc3545; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+    } else {
+        toggleBtn->setText("Iniciar Transmissão de Rádio");
+        toggleBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+    }
     
     urlInput->setEnabled(!active);
     portInput->setEnabled(!active);
     mountInput->setEnabled(!active);
+    userInput->setEnabled(!active);
     passInput->setEnabled(!active);
     bitrateInput->setEnabled(!active);
 

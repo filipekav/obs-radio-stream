@@ -7,9 +7,12 @@
 #include <condition_variable>
 #include <atomic>
 #include <queue>
+#include <functional>
 
 class RadioStreamer {
 public:
+    std::function<void()> on_disconnect_callback;
+    
     RadioStreamer();
     ~RadioStreamer();
 

@@ -70,6 +70,7 @@ void RadioStreamer::worker_thread() {
              m_host.c_str(), m_port, socket.errorString().toStdString().c_str());
         connected = false;
         running = false;
+        if (on_disconnect_callback) on_disconnect_callback();
         return;
     }
 
@@ -97,6 +98,7 @@ void RadioStreamer::worker_thread() {
         blog(LOG_ERROR, "[Radio] Erro ao enviar Header Handshake: %s", socket.errorString().toStdString().c_str());
         connected = false;
         running = false;
+        if (on_disconnect_callback) on_disconnect_callback();
         return;
     }
 
@@ -105,6 +107,7 @@ void RadioStreamer::worker_thread() {
         blog(LOG_ERROR, "[Radio] Timeout aguardando resposta do servidor Icecast: %s", socket.errorString().toStdString().c_str());
         connected = false;
         running = false;
+        if (on_disconnect_callback) on_disconnect_callback();
         return;
     }
 
@@ -118,6 +121,7 @@ void RadioStreamer::worker_thread() {
         connected = false;
         running = false;
         socket.disconnectFromHost();
+        if (on_disconnect_callback) on_disconnect_callback();
         return;
     }
 
@@ -140,6 +144,7 @@ void RadioStreamer::worker_thread() {
             socket.write((const char*)chunk.data(), chunk.size());
             if (!socket.waitForBytesWritten(3000)) {
                 blog(LOG_ERROR, "[Radio] Dropando audio. Falha na escrita do socket: %s", socket.errorString().toStdString().c_str());
+                if (on_disconnect_callback) on_disconnect_callback();
                 break;
             }
         }

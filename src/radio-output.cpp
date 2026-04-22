@@ -15,6 +15,7 @@ struct radio_output_data {
     std::string host;
     int port;
     std::string mount;
+    std::string user;
     std::string pass;
     int bitrate;
 };
@@ -44,6 +45,8 @@ static void radio_output_update(void* data, obs_data_t* settings) {
     ctx->host = obs_data_get_string(settings, "server_url");
     ctx->port = static_cast<int>(obs_data_get_int(settings, "server_port"));
     ctx->mount = obs_data_get_string(settings, "mountpoint");
+    ctx->user = obs_data_get_string(settings, "username");
+    if (ctx->user.empty()) ctx->user = "source";
     ctx->pass = obs_data_get_string(settings, "password");
     ctx->bitrate = static_cast<int>(obs_data_get_int(settings, "bitrate"));
     
@@ -84,7 +87,11 @@ static bool radio_output_start(void* data) {
     lame_set_quality(ctx->lame, 2); // 2 is high quality, 0 is best
     lame_init_params(ctx->lame);
 
-    if (!ctx->streamer->connect(ctx->host, ctx->port, ctx->mount, "source", ctx->pass, ctx->bitrate)) {
+    ctx->streamer->on_disconnect_callback = [ctx]() {
+        obs_output_signal_stop(ctx->output, OBS_OUTPUT_DISCONNECTED);
+    };
+
+    if (!ctx->streamer->connect(ctx->host, ctx->port, ctx->mount, ctx->user, ctx->pass, ctx->bitrate)) {
         lame_close(ctx->lame);
         ctx->lame = nullptr;
         return false;

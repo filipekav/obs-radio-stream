@@ -37,6 +37,11 @@ endif()
 find_package(mp3lame CONFIG)
 if(mp3lame_FOUND)
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE mp3lame::mp3lame)
+  # Extrai a localizacao bruta compilada no VCPKG
+  get_target_property(LAME_LIB_PATH mp3lame::mp3lame IMPORTED_LOCATION_RELEASE)
+  if(NOT LAME_LIB_PATH)
+    get_target_property(LAME_LIB_PATH mp3lame::mp3lame IMPORTED_LOCATION)
+  endif()
 else()
   find_path(LAME_INCLUDE_DIR NAMES lame/lame.h)
   find_library(
@@ -45,6 +50,15 @@ else()
   )
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_INCLUDE_DIR})
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_LIBRARY})
+  set(LAME_LIB_PATH ${LAME_LIBRARY})
+endif()
+
+# --- Configuração extra do libshout ---
+find_path(SHOUT_INCLUDE_DIR NAMES shout/shout.h)
+find_library(SHOUT_LIBRARY NAMES shout libshout)
+if(SHOUT_LIBRARY)
+  target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${SHOUT_INCLUDE_DIR})
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${SHOUT_LIBRARY})
 endif()
 
 target_sources(
@@ -55,22 +69,36 @@ target_sources(
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
 
 if(WIN32)
-  # Lista explícita das DLLs de terceiros que desejamos empacotar.
-  # Descomente e ajuste a linha do libshout com o nome exato do target que você usa.
-  set(
-    EXTERNAL_RUNTIME_DLLS
-    "$<$<TARGET_EXISTS:mp3lame::mp3lame>:$<TARGET_FILE:mp3lame::mp3lame>>"
-    # "$<$<TARGET_EXISTS:shout::shout>:$<TARGET_FILE:shout::shout>>"
-  )
+  set(EXTERNAL_RUNTIME_DLLS "")
 
-  # 1. POST_BUILD: Copia apenas as DLLs especificadas para a pasta local de saída
-  add_custom_command(
-    TARGET ${CMAKE_PROJECT_NAME}
-    POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${EXTERNAL_RUNTIME_DLLS} "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>"
-    COMMAND_EXPAND_LISTS
-  )
+  # Converte o caminho .lib para .dll localizando a pasta bin/ do VCPKG
+  if(LAME_LIB_PATH)
+    string(REGEX REPLACE "\\.lib$" ".dll" LAME_DLL_PATH "${LAME_LIB_PATH}")
+    string(REPLACE "/lib/" "/bin/" LAME_DLL_PATH "${LAME_DLL_PATH}")
+    string(REPLACE "\\lib\\" "\\bin\\" LAME_DLL_PATH "${LAME_DLL_PATH}")
+    if(EXISTS "${LAME_DLL_PATH}")
+      list(APPEND EXTERNAL_RUNTIME_DLLS "${LAME_DLL_PATH}")
+    endif()
+  endif()
 
-  # 2. INSTALL: Empacota especificamente e apenas as DLLs externas no ZIP
-  install(FILES ${EXTERNAL_RUNTIME_DLLS} DESTINATION "obs-plugins/64bit")
+  if(SHOUT_LIBRARY)
+    string(REGEX REPLACE "\\.lib$" ".dll" SHOUT_DLL_PATH "${SHOUT_LIBRARY}")
+    string(REPLACE "/lib/" "/bin/" SHOUT_DLL_PATH "${SHOUT_DLL_PATH}")
+    string(REPLACE "\\lib\\" "\\bin\\" SHOUT_DLL_PATH "${SHOUT_DLL_PATH}")
+    if(EXISTS "${SHOUT_DLL_PATH}")
+      list(APPEND EXTERNAL_RUNTIME_DLLS "${SHOUT_DLL_PATH}")
+    endif()
+  endif()
+
+  if(EXTERNAL_RUNTIME_DLLS)
+    # 1. POST_BUILD: Copia apenas as DLLs reais para a pasta local de saída
+    add_custom_command(
+      TARGET ${CMAKE_PROJECT_NAME}
+      POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${EXTERNAL_RUNTIME_DLLS} "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>"
+    )
+
+    # 2. INSTALL: Empacota apenas as DLLs reais no ZIP
+    install(FILES ${EXTERNAL_RUNTIME_DLLS} DESTINATION "obs-plugins/64bit")
+  endif()
 endif()

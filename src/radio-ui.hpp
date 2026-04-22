@@ -1,6 +1,9 @@
 #pragma once
 
 #include <QDockWidget>
+#include <chrono>
+
+class QCheckBox;
 
 class QLineEdit;
 class QSpinBox;
@@ -20,6 +23,7 @@ public:
 
 private slots:
     void onToggleClicked();
+    void onBrowseClicked();
     void updateStatus();
 
 private:
@@ -34,8 +38,14 @@ private:
     QLineEdit* passInput;
     QComboBox* bitrateInput;
 
+    QCheckBox* recordCheck;
+    QLineEdit* pathDisplay;
+    QPushButton* browseBtn;
+
     QPushButton* toggleBtn;
     QLabel* statusLabel;
+
+    std::chrono::steady_clock::time_point startTime;
 
     QTimer* statusTimer;
     obs_output_t* output;

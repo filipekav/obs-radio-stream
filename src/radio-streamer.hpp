@@ -8,6 +8,7 @@
 #include <atomic>
 #include <queue>
 #include <functional>
+#include <fstream>
 
 class RadioStreamer {
 public:
@@ -17,7 +18,8 @@ public:
     ~RadioStreamer();
 
     bool connect(const std::string& host, int port, const std::string& mount,
-                 const std::string& user, const std::string& pass, int bitrate);
+                 const std::string& user, const std::string& pass, int bitrate,
+                 bool recordLocally, const std::string& recordingPath);
     void disconnect();
     
     void push_audio(const uint8_t* data, size_t size);
@@ -33,6 +35,10 @@ private:
     std::string m_user;
     std::string m_pass;
     int m_bitrate;
+    bool m_record;
+    std::string m_path;
+    
+    std::ofstream recordFile;
 
     std::atomic<bool> connected{false};
     std::atomic<bool> running{false};

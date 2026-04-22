@@ -13,7 +13,8 @@ RadioStreamer::~RadioStreamer() {
 }
 
 bool RadioStreamer::connect(const std::string& host, int port, const std::string& mount,
-                            const std::string& user, const std::string& pass, int bitrate) {
+                            const std::string& user, const std::string& pass, int bitrate,
+                            bool recordLocally, const std::string& recordingPath) {
     if (connected.load()) return true;
 
     m_host = host;
@@ -22,6 +23,8 @@ bool RadioStreamer::connect(const std::string& host, int port, const std::string
     m_user = user;
     m_pass = pass;
     m_bitrate = bitrate;
+    m_record = recordLocally;
+    m_path = recordingPath;
 
     connected = true;
     running = true;
@@ -63,6 +66,15 @@ void RadioStreamer::push_audio(const uint8_t* data, size_t size) {
 
 void RadioStreamer::worker_thread() {
     QTcpSocket socket;
+
+    if (m_record && !m_path.empty()) {
+        recordFile.open(m_path, std::ios::binary);
+        if (!recordFile.is_open()) {
+            blog(LOG_WARNING, "[Radio] Erro ao abrir arquivo para gravação local: %s", m_path.c_str());
+        } else {
+            blog(LOG_INFO, "[Radio] Gravação local ativada: %s", m_path.c_str());
+        }
+    }
     
     socket.connectToHost(QString::fromStdString(m_host), m_port);
     if (!socket.waitForConnected(5000)) {
@@ -141,6 +153,10 @@ void RadioStreamer::worker_thread() {
         }
 
         if (!chunk.empty()) {
+            if (recordFile.is_open()) {
+                recordFile.write((const char*)chunk.data(), chunk.size());
+            }
+
             socket.write((const char*)chunk.data(), chunk.size());
             if (!socket.waitForBytesWritten(3000)) {
                 blog(LOG_ERROR, "[Radio] Dropando audio. Falha na escrita do socket: %s", socket.errorString().toStdString().c_str());
@@ -153,6 +169,11 @@ void RadioStreamer::worker_thread() {
     socket.disconnectFromHost();
     if (socket.state() != QAbstractSocket::UnconnectedState) {
          socket.waitForDisconnected(1000);
+    }
+    
+    if (recordFile.is_open()) {
+        recordFile.close();
+        blog(LOG_INFO, "[Radio] Gravação local finalizada.");
     }
 }
 

@@ -8,8 +8,12 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QCheckBox>
+#include <QFileDialog>
 #include <QTimer>
 #include <QSettings>
+#include <iomanip>
+#include <sstream>
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 
@@ -67,6 +71,17 @@ void RadioDock::initUI() {
     bitrateInput->setCurrentText("128");
     form->addRow("Taxa de Bits (kbps):", bitrateInput);
 
+    recordCheck = new QCheckBox("Gravar transmissão localmente");
+    form->addRow("", recordCheck);
+
+    QHBoxLayout* pathLayout = new QHBoxLayout();
+    pathDisplay = new QLineEdit();
+    pathDisplay->setReadOnly(true);
+    browseBtn = new QPushButton("Procurar...");
+    pathLayout->addWidget(pathDisplay);
+    pathLayout->addWidget(browseBtn);
+    form->addRow("Destino MP3:", pathLayout);
+
     layout->addLayout(form);
 
     toggleBtn = new QPushButton("Iniciar Transmissão de Rádio");
@@ -85,6 +100,7 @@ void RadioDock::initUI() {
     setWidget(widget);
 
     connect(toggleBtn, &QPushButton::clicked, this, &RadioDock::onToggleClicked);
+    connect(browseBtn, &QPushButton::clicked, this, &RadioDock::onBrowseClicked);
 }
 
 void RadioDock::loadSettings() {
@@ -104,6 +120,9 @@ void RadioDock::loadSettings() {
     
     int br = settings.value("bitrate", 128).toInt();
     bitrateInput->setCurrentText(QString::number(br));
+
+    recordCheck->setChecked(settings.value("record_locally", false).toBool());
+    pathDisplay->setText(settings.value("record_path", "").toString());
 }
 
 void RadioDock::saveSettings() {
@@ -115,6 +134,8 @@ void RadioDock::saveSettings() {
     settings.setValue("username", userInput->text());
     settings.setValue("password", passInput->text());
     settings.setValue("bitrate", bitrateInput->currentText().toInt());
+    settings.setValue("record_locally", recordCheck->isChecked());
+    settings.setValue("record_path", pathDisplay->text());
 }
 
 void RadioDock::onToggleClicked() {
@@ -130,10 +151,13 @@ void RadioDock::onToggleClicked() {
         obs_data_set_string(out_settings, "username", userInput->text().toUtf8().constData());
         obs_data_set_string(out_settings, "password", passInput->text().toUtf8().constData());
         obs_data_set_int(out_settings, "bitrate", bitrateInput->currentText().toInt());
+        obs_data_set_bool(out_settings, "record_locally", recordCheck->isChecked());
+        obs_data_set_string(out_settings, "record_path", pathDisplay->text().toUtf8().constData());
         
         obs_output_update(output, out_settings);
         obs_data_release(out_settings);
         
+        startTime = std::chrono::steady_clock::now();
         obs_output_start(output);
     }
 }
@@ -144,9 +168,26 @@ void RadioDock::updateStatus() {
     bool active = obs_output_active(output);
     
     if (active) {
+        auto now = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
+        int hours = duration / 3600;
+        int minutes = (duration % 3600) / 60;
+        int seconds = duration % 60;
+        
+        std::stringstream ss;
+        ss << "Status: Ao Vivo (" << std::setfill('0') << std::setw(2) << hours << ":" 
+           << std::setfill('0') << std::setw(2) << minutes << ":" 
+           << std::setfill('0') << std::setw(2) << seconds << ")";
+           
+        statusLabel->setText(QString::fromStdString(ss.str()));
+        statusLabel->setStyleSheet("color: #28a745;");
+
         toggleBtn->setText("Parar Transmissão");
         toggleBtn->setStyleSheet("background-color: #dc3545; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
     } else {
+        statusLabel->setText("Status: Offline");
+        statusLabel->setStyleSheet("color: #dc3545;");
+
         toggleBtn->setText("Iniciar Transmissão de Rádio");
         toggleBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
     }
@@ -157,12 +198,18 @@ void RadioDock::updateStatus() {
     userInput->setEnabled(!active);
     passInput->setEnabled(!active);
     bitrateInput->setEnabled(!active);
+    recordCheck->setEnabled(!active);
+    browseBtn->setEnabled(!active);
+}
 
-    if (active) {
-        statusLabel->setText("Status: Ao Vivo");
-        statusLabel->setStyleSheet("color: #28a745;");
-    } else {
-        statusLabel->setText("Status: Offline");
-        statusLabel->setStyleSheet("color: #dc3545;");
+void RadioDock::onBrowseClicked() {
+    QString filter = "MP3 Audio (*.mp3)";
+    QString path = QFileDialog::getSaveFileName(this, "Salvar Gravação", "", filter);
+    if (!path.isEmpty()) {
+        if (!path.endsWith(".mp3", Qt::CaseInsensitive)) {
+            path += ".mp3";
+        }
+        pathDisplay->setText(path);
+        recordCheck->setChecked(true);
     }
 }

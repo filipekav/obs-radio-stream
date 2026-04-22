@@ -53,8 +53,18 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
 
-if(WIN32)
-    # Copy DLL dependencies (e.g. libmp3lame.dll) to the output package
+if(WIN32 AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.21)
+    # 1. POST_BUILD: Copia as DLLs dinâmicas (libmp3lame, libshout, etc) para a pasta de saída do build
+    # Isso resolve o problema ao rodar o OBS localmente a partir da pasta de build.
+    add_custom_command(
+        TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:${CMAKE_PROJECT_NAME}>
+            $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>
+        COMMAND_EXPAND_LISTS
+    )
+
+    # 2. INSTALL: Garante que as DLLs entrem no ZIP/pacote final quando gerar a release
     install(FILES $<TARGET_RUNTIME_DLLS:${CMAKE_PROJECT_NAME}>
             DESTINATION "${CMAKE_PROJECT_NAME}/bin/64bit")
 endif()

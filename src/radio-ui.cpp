@@ -12,6 +12,8 @@
 #include <QFileDialog>
 #include <QTimer>
 #include <QSettings>
+#include <QStandardPaths>
+#include <QDir>
 #include <iomanip>
 #include <sstream>
 #include <obs-module.h>
@@ -118,7 +120,13 @@ void RadioDock::loadSettings() {
     bitrateInput->setCurrentText(QString::number(br));
 
     recordCheck->setChecked(settings.value("record_locally", false).toBool());
-    pathDisplay->setText(settings.value("record_path", "").toString());
+
+    QString recordPath = settings.value("record_path", "").toString();
+    if (recordPath.isEmpty()) {
+        QString musicDir = QStandardPaths::writableLocation(QStandardPaths::MusicLocation);
+        recordPath = QDir::cleanPath(musicDir + "/OBS_Radio_Record.mp3");
+    }
+    pathDisplay->setText(recordPath);
 }
 
 void RadioDock::saveSettings() {

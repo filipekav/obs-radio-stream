@@ -57,13 +57,7 @@ else()
   set(LAME_LIB_PATH ${LAME_LIBRARY})
 endif()
 
-# --- Configuração extra do libshout ---
-find_path(SHOUT_INCLUDE_DIR NAMES shout/shout.h)
-find_library(SHOUT_LIBRARY NAMES shout libshout)
-if(SHOUT_LIBRARY)
-  target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${SHOUT_INCLUDE_DIR})
-  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${SHOUT_LIBRARY})
-endif()
+
 
 target_sources(
   ${CMAKE_PROJECT_NAME}
@@ -85,19 +79,7 @@ if(WIN32)
     endif()
   endif()
 
-  if(SHOUT_LIBRARY AND SHOUT_INCLUDE_DIR)
-    get_filename_component(SHOUT_PREFIX "${SHOUT_INCLUDE_DIR}" DIRECTORY)
-    find_file(SHOUT_DLL_PATH
-      NAMES libshout.dll shout.dll
-      PATHS "${SHOUT_PREFIX}/bin"
-      NO_DEFAULT_PATH
-    )
-    if(SHOUT_DLL_PATH)
-      list(APPEND EXTERNAL_RUNTIME_DLLS "${SHOUT_DLL_PATH}")
-    else()
-      message(WARNING "Failed to locate libshout.dll or shout.dll in ${SHOUT_PREFIX}/bin")
-    endif()
-  endif()
+
 
   if(EXTERNAL_RUNTIME_DLLS)
     # 1. POST_BUILD: Copia apenas as DLLs reais para a pasta local de saída

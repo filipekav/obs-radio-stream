@@ -25,13 +25,13 @@ Para construir o plugin a partir do código-fonte, você precisará das seguinte
 - **CMake** (3.28 ou superior)
 - **Bibliotecas de Desenvolvimento (Dev Headers):**
   - `libmp3lame` (para codificação de MP3)
-  - `libshout` (para a comunicação com servidores Icecast)
+
 - **Qt6** (para construir a interface)
 
 ### Passo a passo:
 
 1. Clone este repositório.
-2. Configure o projeto utilizando o CMake. Certifique-se de que o CMake consegue encontrar a instalação do `libobs` (OBS Studio SDK), `Qt6`, `libmp3lame` e `libshout`.
+2. Configure o projeto utilizando o CMake. Certifique-se de que o CMake consegue encontrar a instalação do `libobs` (OBS Studio SDK), `Qt6` e `libmp3lame`.
 3. Compile o projeto:
    ```bash
    cmake -B build

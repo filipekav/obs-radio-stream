@@ -35,8 +35,6 @@ bool RadioStreamer::connect(const std::string& host, int port, const std::string
 }
 
 void RadioStreamer::disconnect() {
-    if (!running.load()) return;
-
     running = false;
     queue_cv.notify_one();
 

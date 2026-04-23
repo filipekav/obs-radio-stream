@@ -17,7 +17,7 @@ static void on_frontend_event(enum obs_frontend_event event, void *private_data)
         QMainWindow* mainWindow = (QMainWindow*)obs_frontend_get_main_window();
         if (mainWindow) {
             RadioDock* dock = new RadioDock(mainWindow);
-            obs_frontend_add_dock(dock);
+            obs_frontend_add_dock_by_id("obs_radio_stream_dock", obs_module_text("DockTitle"), dock);
         }
     }
 }

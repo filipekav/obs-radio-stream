@@ -1,59 +1,44 @@
-# OBS Plugin Template
+# OBS Radio Stream
 
-## Introduction
+**OBS Radio Stream** é um plugin customizado para o OBS Studio que permite capturar o mix de áudio master, codificá-lo em MP3 e transmiti-lo diretamente para servidores Icecast ou AzuraCast (Liquidsoap). Tudo isso através de uma interface nativa (Dock) integrada diretamente no OBS.
 
-The plugin template is meant to be used as a starting point for OBS Studio plugin development. It includes:
+## ✨ Features
 
-* Boilerplate plugin source code
-* A CMake project file
-* GitHub Actions workflows and repository actions
+- **Streaming Direto de Áudio:** Transmite o áudio master do OBS para servidores Icecast ou AzuraCast.
+- **Controle de Bitrate Customizável:** Codificação em MP3 utilizando `libmp3lame`.
+- **Suporte a Autenticação (AzuraCast):** Conexão segura e autenticada com as credenciais do seu servidor.
+- **Gravação Local de MP3:** Opção para gravar a transmissão de áudio localmente, enquanto envia para a rede.
+- **Monitoramento em Tempo Real:** Inclui um timer (uptime) integrado na interface para acompanhar a duração da conexão ao vivo.
 
-## Supported Build Environments
+## 📥 Instalação (Para Usuários)
 
-| Platform  | Tool   |
-|-----------|--------|
-| Windows   | Visual Studio 17 2022 |
-| macOS     | XCode 16.0 |
-| Windows, macOS  | CMake 3.30.5 |
-| Ubuntu 24.04 | CMake 3.28.3 |
-| Ubuntu 24.04 | `ninja-build` |
-| Ubuntu 24.04 | `pkg-config`
-| Ubuntu 24.04 | `build-essential` |
+1. Vá até a aba [Releases](../../releases) no GitHub e baixe o arquivo `.zip` mais recente correspondente ao seu sistema operacional (Windows).
+2. Extraia o conteúdo do `.zip` diretamente para o diretório de instalação do OBS Studio.
+   - Normalmente localizado em: `C:\Program Files\obs-studio\`
+3. Abra o OBS Studio.
+4. Vá em **Docks (Docas)** no menu superior e ative o **OBS Radio Stream**.
 
-## Quick Start
+## 🛠️ Instruções de Compilação (Para Desenvolvedores)
 
-An absolute bare-bones [Quick Start Guide](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide) is available in the wiki.
+Para construir o plugin a partir do código-fonte, você precisará das seguintes dependências:
 
-## Documentation
+- **CMake** (3.28 ou superior)
+- **Bibliotecas de Desenvolvimento (Dev Headers):**
+  - `libmp3lame` (para codificação de MP3)
+  - `libshout` (para a comunicação com servidores Icecast)
+- **Qt6** (para construir a interface)
 
-All documentation can be found in the [Plugin Template Wiki](https://github.com/obsproject/obs-plugintemplate/wiki).
+### Passo a passo:
 
-Suggested reading to get up and running:
+1. Clone este repositório.
+2. Configure o projeto utilizando o CMake. Certifique-se de que o CMake consegue encontrar a instalação do `libobs` (OBS Studio SDK), `Qt6`, `libmp3lame` e `libshout`.
+3. Compile o projeto:
+   ```bash
+   cmake -B build
+   cmake --build build --config Release
+   ```
+4. **Nota sobre as DLLs (Windows):** O script de build do CMake está configurado para copiar automaticamente as bibliotecas de tempo de execução (runtime `.dll`) do `libmp3lame` e `libshout` para a pasta de saída do projeto durante uma compilação bem-sucedida, facilitando o empacotamento.
 
-* [Getting started](https://github.com/obsproject/obs-plugintemplate/wiki/Getting-Started)
-* [Build system requirements](https://github.com/obsproject/obs-plugintemplate/wiki/Build-System-Requirements)
-* [Build system options](https://github.com/obsproject/obs-plugintemplate/wiki/CMake-Build-System-Options)
+## 📄 Licença
 
-## GitHub Actions & CI
-
-Default GitHub Actions workflows are available for the following repository actions:
-
-* `push`: Run for commits or tags pushed to `master` or `main` branches.
-* `pr-pull`: Run when a Pull Request has been pushed or synchronized.
-* `dispatch`: Run when triggered by the workflow dispatch in GitHub's user interface.
-* `build-project`: Builds the actual project and is triggered by other workflows.
-* `check-format`: Checks CMake and plugin source code formatting and is triggered by other workflows.
-
-The workflows make use of GitHub repository actions (contained in `.github/actions`) and build scripts (contained in `.github/scripts`) which are not needed for local development, but might need to be adjusted if additional/different steps are required to build the plugin.
-
-### Retrieving build artifacts
-
-Successful builds on GitHub Actions will produce build artifacts that can be downloaded for testing. These artifacts are commonly simple archives and will not contain package installers or installation programs.
-
-### Building a Release
-
-To create a release, an appropriately named tag needs to be pushed to the `main`/`master` branch using semantic versioning (e.g., `12.3.4`, `23.4.5-beta2`). A draft release will be created on the associated repository with generated installer packages or installation programs attached as release artifacts.
-
-## Signing and Notarizing on macOS
-
-Basic concepts of codesigning and notarization on macOS are explained in the correspodning [Wiki article](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS) which has a specific section for the [GitHub Actions setup](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS#setting-up-code-signing-for-github-actions).
+Este projeto é licenciado sob a **GPLv2**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.

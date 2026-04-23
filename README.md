@@ -1,48 +1,52 @@
 # OBS Radio Stream
 
-**OBS Radio Stream** é um plugin customizado para o OBS Studio que permite capturar o mix de áudio master, codificá-lo em MP3 e transmiti-lo diretamente para servidores Icecast ou AzuraCast (Liquidsoap). Tudo isso através de uma interface nativa (Dock) integrada diretamente no OBS.
+[![GitHub Release](https://img.shields.io/github/v/release/filipekav/obs-radio-stream)](https://github.com/filipekav/obs-radio-stream/releases)
+[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](LICENSE)
+
+**OBS Radio Stream** is a professional OBS Studio plugin designed to stream your master audio mix directly to Icecast or AzuraCast (Liquidsoap) servers. It provides a lightweight, native integration within the OBS interface, allowing for high-quality MP3 streaming without the need for external software or heavy dependencies.
 
 ## ✨ Features
 
-- **Streaming Direto de Áudio:** Transmite o áudio master do OBS para servidores Icecast ou AzuraCast.
-- **Controle de Bitrate Customizável:** Codificação em MP3 utilizando `libmp3lame`.
-- **Suporte a Autenticação (AzuraCast):** Conexão segura e autenticada com as credenciais do seu servidor.
-- **Gravação Local de MP3:** Opção para gravar a transmissão de áudio localmente, enquanto envia para a rede.
-- **Monitoramento em Tempo Real:** Inclui um timer (uptime) integrado na interface para acompanhar a duração da conexão ao vivo.
+- **Direct Audio Streaming:** Stream master audio directly to Icecast/AzuraCast servers.
+- **Custom Bitrate Control:** High-quality MP3 encoding powered by `libmp3lame`.
+- **Native OBS Dock:** Control your broadcast through a dedicated, dockable UI integrated directly into OBS.
+- **AzuraCast Support:** Full support for DJ/Source authentication and handshake protocols.
+- **Local MP3 Backup:** Option to save a local recording of your stream while broadcasting.
+- **Live Connection Timer:** Real-time uptime display to monitor your broadcast duration.
+- **Multi-language Support:** Fully localized UI available in 8 languages.
 
-## 📥 Instalação (Para Usuários)
+## 📥 Installation (For Users)
 
-1. Vá até a aba [Releases](../../releases) no GitHub e baixe o arquivo `.zip` mais recente correspondente ao seu sistema operacional (Windows).
-2. Extraia o conteúdo do `.zip` diretamente para o diretório de instalação do OBS Studio.
-   - Normalmente localizado em: `C:\Program Files\obs-studio\`
-3. Abra o OBS Studio.
-4. Vá em **Docks (Docas)** no menu superior e ative o **OBS Radio Stream**.
+1. Go to the [Releases](../../releases) tab and download the latest `.zip` package for your system (Windows).
+2. Extract the contents of the `.zip` file directly into your OBS Studio installation folder.
+   - Typically: `C:\Program Files\obs-studio\`
+3. Launch OBS Studio.
+4. Navigate to the **Docks** menu at the top and enable **Radio Broadcast**.
 
-## 🛠️ Instruções de Compilação (Para Desenvolvedores)
+## 🛠️ Building from Source (For Developers)
 
-Para construir o plugin a partir do código-fonte, você precisará das seguintes dependências:
+### Prerequisites
+To build the plugin from source, you will need the following dependencies:
+- **CMake** (3.28 or later)
+- **OBS Studio SDK** (`libobs`)
+- **Qt6** (Core, Gui, Widgets, Network)
+- **libmp3lame** development headers
 
-- **CMake** (3.28 ou superior)
-- **Bibliotecas de Desenvolvimento (Dev Headers):**
-  - `libmp3lame` (para codificação de MP3)
+> [!IMPORTANT]
+> **Network Stack:** This plugin implements the Icecast/Liquidsoap protocol manually using native **Qt6 Networking** (`QTcpSocket`). It **does not require** or use `libshout`.
 
-- **Qt6** (para construir a interface)
+### Build Steps
+```bash
+# Configure the project
+cmake -B build
 
-### Passo a passo:
+# Build the project
+cmake --build build --config Release
+```
 
-1. Clone este repositório.
-2. Configure o projeto utilizando o CMake. Certifique-se de que o CMake consegue encontrar a instalação do `libobs` (OBS Studio SDK), `Qt6` e `libmp3lame`.
-3. Compile o projeto:
-   ```bash
-   cmake -B build
-   cmake --build build --config Release
-   ```
-4. **Nota sobre as DLLs (Windows):** O script de build do CMake está configurado para copiar automaticamente as bibliotecas de tempo de execução (runtime `.dll`) do `libmp3lame` e `libshout` para a pasta de saída do projeto durante uma compilação bem-sucedida, facilitando o empacotamento.
+## 🌐 Localization
 
-## 🌐 Localization (Localização)
-
-O plugin suporta os seguintes idiomas:
-
+The user interface currently supports 8 languages:
 - **English** (en-US)
 - **Portuguese** (pt-BR)
 - **Spanish** (es-ES)
@@ -53,10 +57,10 @@ O plugin suporta os seguintes idiomas:
 - **Chinese** (zh-CN)
 
 > [!NOTE]
-> Initial translations for languages other than Portuguese and English were generated with the help of AI. We are looking for native speakers to help refine and improve these translations.
+> Initial translations for languages other than English and Portuguese were generated with the help of AI. We welcome and encourage native speakers to submit a **Pull Request** to refine or improve these translations in the `data/locale/` directory.
 
-If you'd like to contribute with a new language or improve an existing one, please feel free to submit a Pull Request with the updated `.ini` files in the `data/locale/` directory.
+## 📄 License & Credits
 
-## 📄 Licença
+This project is licensed under the **GPLv2**. See the [LICENSE](LICENSE) file for more details.
 
-Este projeto é licenciado sob a **GPLv2**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+Created and maintained by **Filipe Carvalho**.

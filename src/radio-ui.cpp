@@ -18,7 +18,7 @@
 #include <obs-frontend-api.h>
 
 RadioDock::RadioDock(QWidget* parent) : QDockWidget(parent) {
-    setWindowTitle("Controle de Rádio Icecast");
+    setWindowTitle(QString::fromUtf8(obs_module_text("DockTitle")));
     setObjectName("RadioDock");
     
     output = obs_output_create("radio_output", "Icecast Radio Output", nullptr, nullptr);
@@ -47,48 +47,48 @@ void RadioDock::initUI() {
     QFormLayout* form = new QFormLayout();
     
     urlInput = new QLineEdit();
-    form->addRow("URL do Servidor:", urlInput);
+    form->addRow(QString::fromUtf8(obs_module_text("ServerUrl")), urlInput);
     
     portInput = new QSpinBox();
     portInput->setRange(1, 65535);
     portInput->setValue(8000);
-    form->addRow("Porta:", portInput);
+    form->addRow(QString::fromUtf8(obs_module_text("ServerPort")), portInput);
     
     mountInput = new QLineEdit();
     mountInput->setText("/stream");
-    form->addRow("Ponto de Montagem:", mountInput);
+    form->addRow(QString::fromUtf8(obs_module_text("Mountpoint")), mountInput);
     
     userInput = new QLineEdit();
     userInput->setText("source");
-    form->addRow("Usuário:", userInput);
+    form->addRow(QString::fromUtf8(obs_module_text("Username")), userInput);
     
     passInput = new QLineEdit();
     passInput->setEchoMode(QLineEdit::Password);
-    form->addRow("Senha:", passInput);
+    form->addRow(QString::fromUtf8(obs_module_text("Password")), passInput);
     
     bitrateInput = new QComboBox();
     bitrateInput->addItems({"64", "96", "128", "192", "320"});
     bitrateInput->setCurrentText("128");
-    form->addRow("Taxa de Bits (kbps):", bitrateInput);
+    form->addRow(QString::fromUtf8(obs_module_text("Bitrate")), bitrateInput);
 
-    recordCheck = new QCheckBox("Gravar transmissão localmente");
+    recordCheck = new QCheckBox(QString::fromUtf8(obs_module_text("RecordLocally")));
     form->addRow("", recordCheck);
 
     QHBoxLayout* pathLayout = new QHBoxLayout();
     pathDisplay = new QLineEdit();
     pathDisplay->setReadOnly(true);
-    browseBtn = new QPushButton("Procurar...");
+    browseBtn = new QPushButton(QString::fromUtf8(obs_module_text("Browse")));
     pathLayout->addWidget(pathDisplay);
     pathLayout->addWidget(browseBtn);
-    form->addRow("Destino MP3:", pathLayout);
+    form->addRow(QString::fromUtf8(obs_module_text("RecordPath")), pathLayout);
 
     layout->addLayout(form);
 
-    toggleBtn = new QPushButton("Iniciar Transmissão de Rádio");
+    toggleBtn = new QPushButton(QString::fromUtf8(obs_module_text("StartStream")));
     toggleBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
     layout->addWidget(toggleBtn);
 
-    statusLabel = new QLabel("Status: Offline");
+    statusLabel = new QLabel(QString::fromUtf8(obs_module_text("StatusOffline")));
     statusLabel->setAlignment(Qt::AlignCenter);
     QFont f = statusLabel->font();
     f.setBold(true);
@@ -175,20 +175,20 @@ void RadioDock::updateStatus() {
         int seconds = duration % 60;
         
         std::stringstream ss;
-        ss << "Status: Ao Vivo (" << std::setfill('0') << std::setw(2) << hours << ":" 
+        ss << obs_module_text("StatusLive") << " (" << std::setfill('0') << std::setw(2) << hours << ":" 
            << std::setfill('0') << std::setw(2) << minutes << ":" 
            << std::setfill('0') << std::setw(2) << seconds << ")";
            
         statusLabel->setText(QString::fromStdString(ss.str()));
         statusLabel->setStyleSheet("color: #28a745;");
 
-        toggleBtn->setText("Parar Transmissão");
+        toggleBtn->setText(QString::fromUtf8(obs_module_text("StopStream")));
         toggleBtn->setStyleSheet("background-color: #dc3545; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
     } else {
-        statusLabel->setText("Status: Offline");
+        statusLabel->setText(QString::fromUtf8(obs_module_text("StatusOffline")));
         statusLabel->setStyleSheet("color: #dc3545;");
 
-        toggleBtn->setText("Iniciar Transmissão de Rádio");
+        toggleBtn->setText(QString::fromUtf8(obs_module_text("StartStream")));
         toggleBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
     }
     
@@ -203,8 +203,8 @@ void RadioDock::updateStatus() {
 }
 
 void RadioDock::onBrowseClicked() {
-    QString filter = "MP3 Audio (*.mp3)";
-    QString path = QFileDialog::getSaveFileName(this, "Salvar Gravação", "", filter);
+    QString filter = QString::fromUtf8(obs_module_text("MP3Filter"));
+    QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8(obs_module_text("SaveRecordDialogTitle")), "", filter);
     if (!path.isEmpty()) {
         if (!path.endsWith(".mp3", Qt::CaseInsensitive)) {
             path += ".mp3";

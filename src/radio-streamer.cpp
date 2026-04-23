@@ -30,7 +30,7 @@ bool RadioStreamer::connect(const std::string& host, int port, const std::string
     running = true;
     thread_handle = std::thread(&RadioStreamer::worker_thread, this);
 
-    blog(LOG_INFO, "[Radio] Iniciando conexão ao servidor Icecast %s:%d%s", host.c_str(), port, mount.c_str());
+    blog(LOG_INFO, obs_module_text("LogConnecting"), host.c_str(), port, mount.c_str());
     return true;
 }
 
@@ -49,7 +49,7 @@ void RadioStreamer::disconnect() {
     std::lock_guard<std::mutex> lock(queue_mutex);
     while(!audio_queue.empty()) audio_queue.pop();
 
-    blog(LOG_INFO, "[Radio] Desconectado do Icecast");
+    blog(LOG_INFO, "%s", obs_module_text("LogDisconnected"));
 }
 
 void RadioStreamer::push_audio(const uint8_t* data, size_t size) {
@@ -70,15 +70,15 @@ void RadioStreamer::worker_thread() {
     if (m_record && !m_path.empty()) {
         recordFile.open(m_path, std::ios::binary);
         if (!recordFile.is_open()) {
-            blog(LOG_WARNING, "[Radio] Erro ao abrir arquivo para gravação local: %s", m_path.c_str());
+            blog(LOG_WARNING, obs_module_text("LogErrorFileOpen"), m_path.c_str());
         } else {
-            blog(LOG_INFO, "[Radio] Gravação local ativada: %s", m_path.c_str());
+            blog(LOG_INFO, obs_module_text("LogLocalRecordingEnabled"), m_path.c_str());
         }
     }
     
     socket.connectToHost(QString::fromStdString(m_host), m_port);
     if (!socket.waitForConnected(5000)) {
-        blog(LOG_ERROR, "[Radio] Erro de conexão com %s:%d - %s", 
+        blog(LOG_ERROR, obs_module_text("LogErrorConnection"), 
              m_host.c_str(), m_port, socket.errorString().toStdString().c_str());
         connected = false;
         running = false;
@@ -101,14 +101,14 @@ void RadioStreamer::worker_thread() {
                              "Ice-Name: OBS Radio Stream\r\n"
                              "Ice-Bitrate: %3\r\n\r\n")
                              .arg(mt)
-                             .arg(QString(auth_b64))
+                              .arg(QString(auth_b64))
                              .arg(m_bitrate);
 
-    blog(LOG_INFO, "[Radio] Enviando Header Handshake para Icecast:\n%s", header.toStdString().c_str());
+    blog(LOG_INFO, obs_module_text("LogSendingHeader"), header.toStdString().c_str());
 
     socket.write(header.toUtf8());
     if (!socket.waitForBytesWritten(3000)) {
-        blog(LOG_ERROR, "[Radio] Erro ao enviar Header Handshake: %s", socket.errorString().toStdString().c_str());
+        blog(LOG_ERROR, obs_module_text("LogErrorHeader"), socket.errorString().toStdString().c_str());
         connected = false;
         running = false;
         if (on_disconnect_callback) on_disconnect_callback();
@@ -117,7 +117,7 @@ void RadioStreamer::worker_thread() {
 
     // Leitura e validação da resposta do servidor
     if (!socket.waitForReadyRead(5000)) {
-        blog(LOG_ERROR, "[Radio] Timeout aguardando resposta do servidor Icecast: %s", socket.errorString().toStdString().c_str());
+        blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
         connected = false;
         running = false;
         if (on_disconnect_callback) on_disconnect_callback();
@@ -126,11 +126,11 @@ void RadioStreamer::worker_thread() {
 
     QByteArray response = socket.readAll();
     QString responseStr = QString::fromUtf8(response);
-    blog(LOG_INFO, "[Radio] Resposta Recebida do Servidor:\n%s", responseStr.toStdString().c_str());
+    blog(LOG_INFO, obs_module_text("LogResponseReceived"), responseStr.toStdString().c_str());
 
     if (!responseStr.contains("200 OK", Qt::CaseInsensitive) && 
         !responseStr.contains("100 Continue", Qt::CaseInsensitive)) {
-        blog(LOG_ERROR, "[Radio] Acesso negado ou erro no handshake do servidor. Abortando transmissão.");
+        blog(LOG_ERROR, "%s", obs_module_text("LogErrorAuth"));
         connected = false;
         running = false;
         socket.disconnectFromHost();
@@ -161,7 +161,7 @@ void RadioStreamer::worker_thread() {
 
             socket.write((const char*)chunk.data(), chunk.size());
             if (!socket.waitForBytesWritten(3000)) {
-                blog(LOG_ERROR, "[Radio] Dropando audio. Falha na escrita do socket: %s", socket.errorString().toStdString().c_str());
+                blog(LOG_ERROR, obs_module_text("LogErrorSocketWrite"), socket.errorString().toStdString().c_str());
                 if (on_disconnect_callback) on_disconnect_callback();
                 break;
             }
@@ -175,7 +175,7 @@ void RadioStreamer::worker_thread() {
     
     if (recordFile.is_open()) {
         recordFile.close();
-        blog(LOG_INFO, "[Radio] Gravação local finalizada.");
+        blog(LOG_INFO, "%s", obs_module_text("LogRecordingFinished"));
     }
 }
 

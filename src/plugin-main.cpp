@@ -8,7 +8,7 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-radio-stream", "en-US")
 MODULE_EXPORT const char *obs_module_description(void)
 {
-    return "OBS Studio plugin to stream audio directly to Icecast/AzuraCast (Liquidsoap).";
+    return obs_module_text("PluginDescription");
 }
 
 static void on_frontend_event(enum obs_frontend_event event, void *private_data) {

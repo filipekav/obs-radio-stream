@@ -23,7 +23,7 @@ struct radio_output_data {
 };
 
 static const char* radio_output_get_name(void*) {
-    return "Icecast Radio Output";
+    return obs_module_text("OutputName");
 }
 
 static void* radio_output_create(obs_data_t* settings, obs_output_t* output) {
@@ -63,20 +63,20 @@ static bool radio_output_start(void* data) {
     
     // Validate output structure early on
     if (!obs_output_can_begin_data_capture(ctx->output, 0)) {
-        blog(LOG_ERROR, "[Radio] Não é possível iniciar a captura de dados no OBS.");
+        blog(LOG_ERROR, "%s", obs_module_text("ErrorCapture"));
         return false;
     }
 
     ctx->lame = lame_init();
     if (!ctx->lame) {
-        blog(LOG_ERROR, "[Radio] Falha ao inicializar codificador LAME");
+        blog(LOG_ERROR, "%s", obs_module_text("ErrorLameInit"));
         return false;
     }
 
     // Capture main default audio (already initialized by OBS)
     audio_t* audio = obs_output_audio(ctx->output);
     if (!audio) {
-        blog(LOG_ERROR, "[Radio] Nenhum contexto de áudio encontrado no OBS.");
+        blog(LOG_ERROR, "%s", obs_module_text("ErrorNoAudioContext"));
         lame_close(ctx->lame);
         ctx->lame = nullptr;
         return false;
@@ -115,7 +115,7 @@ static bool radio_output_start(void* data) {
         return false;
     }
 
-    blog(LOG_INFO, "[Radio] Stream iniciado com sucesso");
+    blog(LOG_INFO, "%s", obs_module_text("LogStreamStarted"));
     return true;
 }
 
@@ -136,7 +136,7 @@ static void radio_output_stop(void* data, uint64_t ts) {
     }
 
     ctx->streamer->disconnect();
-    blog(LOG_INFO, "[Radio] Stream parado");
+    blog(LOG_INFO, "%s", obs_module_text("LogStreamStopped"));
 }
 
 static void radio_output_raw_audio(void* data, struct audio_data* frames) {

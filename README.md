@@ -39,6 +39,24 @@ Para construir o plugin a partir do código-fonte, você precisará das seguinte
    ```
 4. **Nota sobre as DLLs (Windows):** O script de build do CMake está configurado para copiar automaticamente as bibliotecas de tempo de execução (runtime `.dll`) do `libmp3lame` e `libshout` para a pasta de saída do projeto durante uma compilação bem-sucedida, facilitando o empacotamento.
 
+## 🌐 Localization (Localização)
+
+O plugin suporta os seguintes idiomas:
+
+- **English** (en-US)
+- **Portuguese** (pt-BR)
+- **Spanish** (es-ES)
+- **Russian** (ru-RU)
+- **German** (de-DE)
+- **French** (fr-FR)
+- **Japanese** (ja-JP)
+- **Chinese** (zh-CN)
+
+> [!NOTE]
+> Initial translations for languages other than Portuguese and English were generated with the help of AI. We are looking for native speakers to help refine and improve these translations.
+
+If you'd like to contribute with a new language or improve an existing one, please feel free to submit a Pull Request with the updated `.ini` files in the `data/locale/` directory.
+
 ## 📄 Licença
 
 Este projeto é licenciado sob a **GPLv2**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.

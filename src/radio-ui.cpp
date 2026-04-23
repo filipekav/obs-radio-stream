@@ -39,8 +39,7 @@ RadioDock::~RadioDock() {
 }
 
 void RadioDock::initUI() {
-    QWidget* widget = new QWidget();
-    QVBoxLayout* layout = new QVBoxLayout(widget);
+    QVBoxLayout* layout = new QVBoxLayout(this);
 
     QFormLayout* form = new QFormLayout();
     
@@ -95,7 +94,6 @@ void RadioDock::initUI() {
     layout->addWidget(statusLabel);
     
     layout->addStretch();
-    setWidget(widget);
 
     connect(toggleBtn, &QPushButton::clicked, this, &RadioDock::onToggleClicked);
     connect(browseBtn, &QPushButton::clicked, this, &RadioDock::onBrowseClicked);

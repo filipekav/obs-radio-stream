@@ -17,8 +17,7 @@ static void on_frontend_event(enum obs_frontend_event event, void *private_data)
         QMainWindow* mainWindow = (QMainWindow*)obs_frontend_get_main_window();
         if (mainWindow) {
             RadioDock* dock = new RadioDock(mainWindow);
-            mainWindow->addDockWidget(Qt::LeftDockWidgetArea, dock);
-            dock->setVisible(true);
+            obs_frontend_add_dock(dock);
         }
     }
 }

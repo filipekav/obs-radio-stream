@@ -17,9 +17,7 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 
-RadioDock::RadioDock(QWidget* parent) : QDockWidget(parent) {
-    setWindowTitle(QString::fromUtf8(obs_module_text("DockTitle")));
-    setObjectName("RadioDock");
+RadioDock::RadioDock(QWidget* parent) : QWidget(parent) {
     
     output = obs_output_create("radio_output", "Icecast Radio Output", nullptr, nullptr);
 

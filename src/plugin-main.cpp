@@ -13,7 +13,7 @@ MODULE_EXPORT const char *obs_module_description(void)
 
 static void on_frontend_event(enum obs_frontend_event event, void *private_data) {
     (void)private_data;
-    if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+    if (event == OBS_FRONTEND_EVENT_GUI_SETUP) {
         QMainWindow* mainWindow = (QMainWindow*)obs_frontend_get_main_window();
         if (mainWindow) {
             RadioDock* dock = new RadioDock(mainWindow);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <QDockWidget>
+#include <QWidget>
 #include <chrono>
 
 class QCheckBox;
@@ -15,7 +15,7 @@ class QTimer;
 struct obs_output;
 typedef struct obs_output obs_output_t;
 
-class RadioDock : public QDockWidget {
+class RadioDock : public QWidget {
     Q_OBJECT
 public:
     RadioDock(QWidget* parent = nullptr);

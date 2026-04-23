@@ -17,6 +17,14 @@ bool RadioStreamer::connect(const std::string& host, int port, const std::string
                             bool recordLocally, const std::string& recordingPath) {
     if (connected.load()) return true;
 
+    if (thread_handle.joinable()) {
+        thread_handle.join();
+    }
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        while(!audio_queue.empty()) audio_queue.pop();
+    }
+
     m_host = host;
     m_port = port;
     m_mount = mount;

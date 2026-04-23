@@ -67,6 +67,11 @@ static bool radio_output_start(void* data) {
         return false;
     }
 
+    if (ctx->lame) {
+        lame_close(ctx->lame);
+        ctx->lame = nullptr;
+    }
+
     ctx->lame = lame_init();
     if (!ctx->lame) {
         blog(LOG_ERROR, "%s", obs_module_text("ErrorLameInit"));

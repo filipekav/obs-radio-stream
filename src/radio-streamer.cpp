@@ -83,8 +83,8 @@ void RadioStreamer::worker_thread() {
         }
     }
     
-    socket.connectToHost(QString::fromStdString(m_host), m_port);
-    if (!socket.waitForConnected(5000)) {
+    socket.connectToHost(QString::fromStdString(m_host), m_port, QIODevice::ReadWrite, QAbstractSocket::IPv4Protocol);
+    if (!socket.waitForConnected(15000)) {
         blog(LOG_ERROR, obs_module_text("LogErrorConnection"), 
              m_host.c_str(), m_port, socket.errorString().toStdString().c_str());
         connected = false;
@@ -124,7 +124,7 @@ void RadioStreamer::worker_thread() {
         }
 
         // Leitura e validação da resposta do servidor
-        if (!socket.waitForReadyRead(5000)) {
+        if (!socket.waitForReadyRead(15000)) {
             blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
             connected = false;
             running = false;
@@ -150,7 +150,7 @@ void RadioStreamer::worker_thread() {
         QString pass_header = QString::fromStdString(m_pass) + "\r\n";
         socket.write(pass_header.toUtf8());
 
-        if (!socket.waitForBytesWritten(3000)) {
+        if (!socket.waitForBytesWritten(15000)) {
             blog(LOG_ERROR, obs_module_text("LogErrorHeader"), socket.errorString().toStdString().c_str());
             connected = false;
             running = false;
@@ -158,7 +158,7 @@ void RadioStreamer::worker_thread() {
             return;
         }
 
-        if (!socket.waitForReadyRead(5000)) {
+        if (!socket.waitForReadyRead(15000)) {
             blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
             connected = false;
             running = false;
@@ -178,6 +178,16 @@ void RadioStreamer::worker_thread() {
             if (on_disconnect_callback) on_disconnect_callback();
             socket.abort();
             return;
+        }
+
+        // Send SHOUTcast v1 ICY headers
+        QString icy_headers = QString("icy-name: OBS Radio Stream\r\n"
+                                      "icy-genre: Live Broadcast\r\n"
+                                      "icy-br: %1\r\n"
+                                      "icy-pub: 0\r\n\r\n").arg(m_bitrate);
+        socket.write(icy_headers.toUtf8());
+        if (!socket.waitForBytesWritten(5000)) {
+            blog(LOG_ERROR, "[Radio] Error sending ICY headers.");
         }
     }
 

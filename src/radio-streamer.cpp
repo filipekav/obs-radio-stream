@@ -83,16 +83,22 @@ void RadioStreamer::worker_thread() {
         }
     }
     
+    // SHOUTcast v1 DNAS: source/DJ clients connect on port+1
+    int connect_port = m_port;
+    if (m_protocol_type == 1) {
+        connect_port = m_port + 1;
+    }
+
     QString log_mount = (m_protocol_type == 0) ? QString::fromStdString(m_mount) : "";
-    blog(LOG_INFO, obs_module_text("LogConnecting"), m_host.c_str(), m_port, log_mount.toStdString().c_str());
+    blog(LOG_INFO, obs_module_text("LogConnecting"), m_host.c_str(), connect_port, log_mount.toStdString().c_str());
 
     socket.setProxy(QNetworkProxy::NoProxy); // Bypass Windows Proxies
     QString clean_host = QString::fromStdString(m_host).trimmed();
-    socket.connectToHost(clean_host, m_port);
+    socket.connectToHost(clean_host, connect_port);
 
     if (!socket.waitForConnected(15000)) {
         blog(LOG_ERROR, obs_module_text("LogErrorConnection"), 
-             clean_host.toStdString().c_str(), m_port, socket.errorString().toStdString().c_str());
+             clean_host.toStdString().c_str(), connect_port, socket.errorString().toStdString().c_str());
         connected = false;
         running = false;
         if (on_disconnect_callback) on_disconnect_callback();

@@ -43,10 +43,19 @@ if(mp3lame_FOUND)
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE mp3lame::mp3lame)
 else()
   find_path(LAME_INCLUDE_DIR NAMES lame/lame.h)
-  find_library(
-    LAME_LIBRARY
-    NAMES libmp3lame.a lame.a libmp3lame-static mp3lame-static libmp3lame mp3lame lame
-  )
+  if(WIN32 OR APPLE)
+    # Prioritize static libraries for Windows and macOS to create standalone plugins
+    find_library(
+      LAME_LIBRARY
+      NAMES libmp3lame.a lame.a libmp3lame-static mp3lame-static libmp3lame mp3lame lame
+    )
+  else()
+    # Use standard dynamic linking for Linux to avoid -fPIC relocation errors
+    find_library(
+      LAME_LIBRARY
+      NAMES mp3lame lame libmp3lame
+    )
+  endif()
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_INCLUDE_DIR})
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_LIBRARY})
 endif()

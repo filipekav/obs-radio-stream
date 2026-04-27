@@ -14,7 +14,7 @@ RadioStreamer::~RadioStreamer() {
 
 bool RadioStreamer::connect(const std::string& host, int port, const std::string& mount,
                             const std::string& user, const std::string& pass, int bitrate,
-                            bool recordLocally, const std::string& recordingPath) {
+                            bool recordLocally, const std::string& recordingPath, int protocol_type) {
     if (connected.load()) return true;
 
     if (thread_handle.joinable()) {
@@ -33,6 +33,7 @@ bool RadioStreamer::connect(const std::string& host, int port, const std::string
     m_bitrate = bitrate;
     m_record = recordLocally;
     m_path = recordingPath;
+    m_protocol_type = protocol_type;
 
     connected = true;
     running = true;
@@ -93,56 +94,91 @@ void RadioStreamer::worker_thread() {
         return;
     }
 
-    QString auth_str = QString::fromStdString(m_user + ":" + m_pass);
-    QByteArray auth_b64 = auth_str.toUtf8().toBase64();
-    
-    QString mt = QString::fromStdString(m_mount);
-    if (!mt.startsWith("/")) {
-        mt = "/" + mt;
-    }
+    if (m_protocol_type == 0) {
+        QString auth_str = QString::fromStdString(m_user + ":" + m_pass);
+        QByteArray auth_b64 = auth_str.toUtf8().toBase64();
+        
+        QString mt = QString::fromStdString(m_mount);
+        if (!mt.startsWith("/")) {
+            mt = "/" + mt;
+        }
 
-    QString header = QString("PUT %1 HTTP/1.0\r\n"
-                             "Authorization: Basic %2\r\n"
-                             "Content-Type: audio/mpeg\r\n"
-                             "Ice-Name: OBS Radio Stream\r\n"
-                             "Ice-Bitrate: %3\r\n\r\n")
-                             .arg(mt)
-                              .arg(QString(auth_b64))
-                             .arg(m_bitrate);
+        QString header = QString("PUT %1 HTTP/1.0\r\n"
+                                 "Authorization: Basic %2\r\n"
+                                 "Content-Type: audio/mpeg\r\n"
+                                 "Ice-Name: OBS Radio Stream\r\n"
+                                 "Ice-Bitrate: %3\r\n\r\n")
+                                 .arg(mt)
+                                  .arg(QString(auth_b64))
+                                 .arg(m_bitrate);
 
-    blog(LOG_INFO, obs_module_text("LogSendingHeader"), header.toStdString().c_str());
+        blog(LOG_INFO, obs_module_text("LogSendingHeader"), header.toStdString().c_str());
 
-    socket.write(header.toUtf8());
-    if (!socket.waitForBytesWritten(3000)) {
-        blog(LOG_ERROR, obs_module_text("LogErrorHeader"), socket.errorString().toStdString().c_str());
-        connected = false;
-        running = false;
-        if (on_disconnect_callback) on_disconnect_callback();
-        return;
-    }
+        socket.write(header.toUtf8());
+        if (!socket.waitForBytesWritten(3000)) {
+            blog(LOG_ERROR, obs_module_text("LogErrorHeader"), socket.errorString().toStdString().c_str());
+            connected = false;
+            running = false;
+            if (on_disconnect_callback) on_disconnect_callback();
+            return;
+        }
 
-    // Leitura e validação da resposta do servidor
-    if (!socket.waitForReadyRead(5000)) {
-        blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
-        connected = false;
-        running = false;
-        if (on_disconnect_callback) on_disconnect_callback();
-        return;
-    }
+        // Leitura e validação da resposta do servidor
+        if (!socket.waitForReadyRead(5000)) {
+            blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
+            connected = false;
+            running = false;
+            if (on_disconnect_callback) on_disconnect_callback();
+            return;
+        }
 
-    QByteArray response = socket.readAll();
-    QString responseStr = QString::fromUtf8(response);
-    blog(LOG_INFO, obs_module_text("LogResponseReceived"), responseStr.toStdString().c_str());
+        QByteArray response = socket.readAll();
+        QString responseStr = QString::fromUtf8(response);
+        blog(LOG_INFO, obs_module_text("LogResponseReceived"), responseStr.toStdString().c_str());
 
-    if (!responseStr.contains("200 OK", Qt::CaseInsensitive) && 
-        !responseStr.contains("100 Continue", Qt::CaseInsensitive)) {
-        blog(LOG_ERROR, "%s", obs_module_text("LogErrorAuth"));
-        connected = false;
-        running = false;
-        socket.disconnectFromHost();
-        if (on_disconnect_callback) on_disconnect_callback();
-        socket.abort();
-        return;
+        if (!responseStr.contains("200 OK", Qt::CaseInsensitive) && 
+            !responseStr.contains("100 Continue", Qt::CaseInsensitive)) {
+            blog(LOG_ERROR, "%s", obs_module_text("LogErrorAuth"));
+            connected = false;
+            running = false;
+            socket.disconnectFromHost();
+            if (on_disconnect_callback) on_disconnect_callback();
+            socket.abort();
+            return;
+        }
+    } else {
+        QString pass_header = QString::fromStdString(m_pass) + "\r\n";
+        socket.write(pass_header.toUtf8());
+
+        if (!socket.waitForBytesWritten(3000)) {
+            blog(LOG_ERROR, obs_module_text("LogErrorHeader"), socket.errorString().toStdString().c_str());
+            connected = false;
+            running = false;
+            if (on_disconnect_callback) on_disconnect_callback();
+            return;
+        }
+
+        if (!socket.waitForReadyRead(5000)) {
+            blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
+            connected = false;
+            running = false;
+            if (on_disconnect_callback) on_disconnect_callback();
+            return;
+        }
+
+        QByteArray response = socket.readAll();
+        QString responseStr = QString::fromUtf8(response);
+        blog(LOG_INFO, obs_module_text("LogResponseReceived"), responseStr.toStdString().c_str());
+
+        if (!responseStr.contains("OK2", Qt::CaseInsensitive)) {
+            blog(LOG_ERROR, "%s", obs_module_text("LogErrorAuth"));
+            connected = false;
+            running = false;
+            socket.disconnectFromHost();
+            if (on_disconnect_callback) on_disconnect_callback();
+            socket.abort();
+            return;
+        }
     }
 
     while (running.load()) {

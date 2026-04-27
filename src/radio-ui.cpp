@@ -47,6 +47,10 @@ void RadioDock::initUI() {
 
     QFormLayout* form = new QFormLayout();
     
+    protocolInput = new QComboBox();
+    protocolInput->addItems({"Icecast / AzuraCast", "SHOUTcast (v1)"});
+    form->addRow("Protocol:", protocolInput);
+    
     urlInput = new QLineEdit();
     form->addRow(QString::fromUtf8(obs_module_text("ServerUrl")), urlInput);
     
@@ -106,6 +110,8 @@ void RadioDock::initUI() {
 void RadioDock::loadSettings() {
     QSettings settings("OBSPlugins", "RadioStreamer");
     
+    protocolInput->setCurrentIndex(settings.value("protocol_type", 0).toInt());
+    
     urlInput->setText(settings.value("server_url").toString());
     
     int port = settings.value("server_port", 8000).toInt();
@@ -138,6 +144,7 @@ void RadioDock::loadSettings() {
 void RadioDock::saveSettings() {
     QSettings settings("OBSPlugins", "RadioStreamer");
 
+    settings.setValue("protocol_type", protocolInput->currentIndex());
     settings.setValue("server_url", urlInput->text());
     settings.setValue("server_port", portInput->value());
     settings.setValue("mountpoint", mountInput->text());
@@ -155,6 +162,7 @@ void RadioDock::onToggleClicked() {
         saveSettings();
 
         obs_data_t* out_settings = obs_data_create();
+        obs_data_set_int(out_settings, "protocol_type", protocolInput->currentIndex());
         obs_data_set_string(out_settings, "server_url", urlInput->text().toUtf8().constData());
         obs_data_set_int(out_settings, "server_port", portInput->value());
         obs_data_set_string(out_settings, "mountpoint", mountInput->text().toUtf8().constData());
@@ -206,6 +214,7 @@ void RadioDock::updateStatus() {
         toggleBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
     }
     
+    protocolInput->setEnabled(!active);
     urlInput->setEnabled(!active);
     portInput->setEnabled(!active);
     mountInput->setEnabled(!active);

@@ -32,6 +32,7 @@ private:
     void saveSettings();
 
     QLineEdit* urlInput;
+    QComboBox* protocolInput;
     QSpinBox* portInput;
     QLineEdit* mountInput;
     QLineEdit* userInput;

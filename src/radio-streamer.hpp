@@ -19,7 +19,7 @@ public:
 
     bool connect(const std::string& host, int port, const std::string& mount,
                  const std::string& user, const std::string& pass, int bitrate,
-                 bool recordLocally, const std::string& recordingPath);
+                 bool recordLocally, const std::string& recordingPath, int protocol_type);
     void disconnect();
     
     void push_audio(const uint8_t* data, size_t size);
@@ -37,6 +37,7 @@ private:
     int m_bitrate;
     bool m_record;
     std::string m_path;
+    int m_protocol_type;
     
     std::ofstream recordFile;
 

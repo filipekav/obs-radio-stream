@@ -20,6 +20,7 @@ struct radio_output_data {
     int bitrate;
     bool record_locally;
     std::string record_path;
+    int protocol_type;
 };
 
 static const char* radio_output_get_name(void*) {
@@ -53,6 +54,7 @@ static void radio_output_update(void* data, obs_data_t* settings) {
     ctx->bitrate = static_cast<int>(obs_data_get_int(settings, "bitrate"));
     ctx->record_locally = obs_data_get_bool(settings, "record_locally");
     ctx->record_path = obs_data_get_string(settings, "record_path");
+    ctx->protocol_type = static_cast<int>(obs_data_get_int(settings, "protocol_type"));
     
     if (ctx->port == 0) ctx->port = 8000;
     if (ctx->bitrate == 0) ctx->bitrate = 128;
@@ -102,7 +104,7 @@ static bool radio_output_start(void* data) {
         }).detach();
     };
 
-    if (!ctx->streamer->connect(ctx->host, ctx->port, ctx->mount, ctx->user, ctx->pass, ctx->bitrate, ctx->record_locally, ctx->record_path)) {
+    if (!ctx->streamer->connect(ctx->host, ctx->port, ctx->mount, ctx->user, ctx->pass, ctx->bitrate, ctx->record_locally, ctx->record_path, ctx->protocol_type)) {
         lame_close(ctx->lame);
         ctx->lame = nullptr;
         return false;

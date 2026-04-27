@@ -4,6 +4,7 @@
 #include <QString>
 #include <QByteArray>
 #include <QAbstractSocket>
+#include <QNetworkProxy>
 
 RadioStreamer::RadioStreamer() {
 }
@@ -39,7 +40,6 @@ bool RadioStreamer::connect(const std::string& host, int port, const std::string
     running = true;
     thread_handle = std::thread(&RadioStreamer::worker_thread, this);
 
-    blog(LOG_INFO, obs_module_text("LogConnecting"), host.c_str(), port, mount.c_str());
     return true;
 }
 
@@ -83,10 +83,16 @@ void RadioStreamer::worker_thread() {
         }
     }
     
-    socket.connectToHost(QString::fromStdString(m_host), m_port, QIODevice::ReadWrite, QAbstractSocket::IPv4Protocol);
+    QString log_mount = (m_protocol_type == 0) ? QString::fromStdString(m_mount) : "";
+    blog(LOG_INFO, obs_module_text("LogConnecting"), m_host.c_str(), m_port, log_mount.toStdString().c_str());
+
+    socket.setProxy(QNetworkProxy::NoProxy); // Bypass Windows Proxies
+    QString clean_host = QString::fromStdString(m_host).trimmed();
+    socket.connectToHost(clean_host, m_port);
+
     if (!socket.waitForConnected(15000)) {
         blog(LOG_ERROR, obs_module_text("LogErrorConnection"), 
-             m_host.c_str(), m_port, socket.errorString().toStdString().c_str());
+             clean_host.toStdString().c_str(), m_port, socket.errorString().toStdString().c_str());
         connected = false;
         running = false;
         if (on_disconnect_callback) on_disconnect_callback();
@@ -147,18 +153,10 @@ void RadioStreamer::worker_thread() {
             return;
         }
     } else {
-        QString pass_header = QString::fromStdString(m_pass) + "\r\n";
+        QString pass_header = QString::fromStdString(m_pass).trimmed() + "\r\n";
         socket.write(pass_header.toUtf8());
 
-        if (!socket.waitForBytesWritten(15000)) {
-            blog(LOG_ERROR, obs_module_text("LogErrorHeader"), socket.errorString().toStdString().c_str());
-            connected = false;
-            running = false;
-            if (on_disconnect_callback) on_disconnect_callback();
-            return;
-        }
-
-        if (!socket.waitForReadyRead(15000)) {
+        if (!socket.waitForBytesWritten(15000) || !socket.waitForReadyRead(15000)) {
             blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
             connected = false;
             running = false;
@@ -180,15 +178,13 @@ void RadioStreamer::worker_thread() {
             return;
         }
 
-        // Send SHOUTcast v1 ICY headers
+        // Send required ICY headers for SHOUTcast v1
         QString icy_headers = QString("icy-name: OBS Radio Stream\r\n"
                                       "icy-genre: Live Broadcast\r\n"
                                       "icy-br: %1\r\n"
                                       "icy-pub: 0\r\n\r\n").arg(m_bitrate);
         socket.write(icy_headers.toUtf8());
-        if (!socket.waitForBytesWritten(5000)) {
-            blog(LOG_ERROR, "[Radio] Error sending ICY headers.");
-        }
+        socket.waitForBytesWritten(5000);
     }
 
     while (running.load()) {

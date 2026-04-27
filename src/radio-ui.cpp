@@ -23,7 +23,7 @@
 
 RadioDock::RadioDock(QWidget* parent) : QWidget(parent) {
     
-    output = obs_output_create("radio_output", "Icecast Radio Output", nullptr, nullptr);
+    output = obs_output_create("radio_output", "Radio Stream Output", nullptr, nullptr);
 
     initUI();
     loadSettings();

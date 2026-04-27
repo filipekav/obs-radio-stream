@@ -4,7 +4,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCO
 
 project(obs-radio-stream
     VERSION 1.1.0
-    DESCRIPTION "OBS Studio plugin to stream audio directly to Icecast/AzuraCast (Liquidsoap)."
+    DESCRIPTION "OBS Studio plugin to stream audio directly to Icecast, AzuraCast, and SHOUTcast servers."
     LANGUAGES C CXX
 )
 

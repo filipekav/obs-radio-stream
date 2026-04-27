@@ -45,7 +45,7 @@ else()
   find_path(LAME_INCLUDE_DIR NAMES lame/lame.h)
   find_library(
     LAME_LIBRARY
-    NAMES libmp3lame-static mp3lame-static libmp3lame mp3lame lame
+    NAMES libmp3lame.a lame.a libmp3lame-static mp3lame-static libmp3lame mp3lame lame
   )
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_INCLUDE_DIR})
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_LIBRARY})

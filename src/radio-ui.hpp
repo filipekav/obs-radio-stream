@@ -25,6 +25,7 @@ private slots:
     void onToggleClicked();
     void onBrowseClicked();
     void updateStatus();
+    void onProtocolChanged(int index);
 
 private:
     void initUI();
@@ -50,4 +51,7 @@ private:
 
     QTimer* statusTimer;
     obs_output_t* output;
+
+    class QFormLayout* formLayout;
+    int currentProtocol;
 };

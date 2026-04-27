@@ -45,39 +45,42 @@ RadioDock::~RadioDock() {
 void RadioDock::initUI() {
     QVBoxLayout* layout = new QVBoxLayout(this);
 
-    QFormLayout* form = new QFormLayout();
+    formLayout = new QFormLayout();
     
     protocolInput = new QComboBox();
     protocolInput->addItems({"Icecast / AzuraCast", "SHOUTcast (v1)"});
-    form->addRow("Protocol:", protocolInput);
+    formLayout->addRow("Protocol:", protocolInput);
+    
+    connect(protocolInput, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RadioDock::onProtocolChanged);
+    currentProtocol = 0;
     
     urlInput = new QLineEdit();
-    form->addRow(QString::fromUtf8(obs_module_text("ServerUrl")), urlInput);
+    formLayout->addRow(QString::fromUtf8(obs_module_text("ServerUrl")), urlInput);
     
     portInput = new QSpinBox();
     portInput->setRange(1, 65535);
     portInput->setValue(8000);
-    form->addRow(QString::fromUtf8(obs_module_text("ServerPort")), portInput);
+    formLayout->addRow(QString::fromUtf8(obs_module_text("ServerPort")), portInput);
     
     mountInput = new QLineEdit();
     mountInput->setText("/stream");
-    form->addRow(QString::fromUtf8(obs_module_text("Mountpoint")), mountInput);
+    formLayout->addRow(QString::fromUtf8(obs_module_text("Mountpoint")), mountInput);
     
     userInput = new QLineEdit();
     userInput->setText("source");
-    form->addRow(QString::fromUtf8(obs_module_text("Username")), userInput);
+    formLayout->addRow(QString::fromUtf8(obs_module_text("Username")), userInput);
     
     passInput = new QLineEdit();
     passInput->setEchoMode(QLineEdit::Password);
-    form->addRow(QString::fromUtf8(obs_module_text("Password")), passInput);
+    formLayout->addRow(QString::fromUtf8(obs_module_text("Password")), passInput);
     
     bitrateInput = new QComboBox();
     bitrateInput->addItems({"64", "96", "128", "192", "320"});
     bitrateInput->setCurrentText("128");
-    form->addRow(QString::fromUtf8(obs_module_text("Bitrate")), bitrateInput);
+    formLayout->addRow(QString::fromUtf8(obs_module_text("Bitrate")), bitrateInput);
 
     recordCheck = new QCheckBox(QString::fromUtf8(obs_module_text("RecordLocally")));
-    form->addRow("", recordCheck);
+    formLayout->addRow("", recordCheck);
 
     QHBoxLayout* pathLayout = new QHBoxLayout();
     pathDisplay = new QLineEdit();
@@ -85,9 +88,9 @@ void RadioDock::initUI() {
     browseBtn = new QPushButton(QString::fromUtf8(obs_module_text("Browse")));
     pathLayout->addWidget(pathDisplay);
     pathLayout->addWidget(browseBtn);
-    form->addRow(QString::fromUtf8(obs_module_text("RecordPath")), pathLayout);
+    formLayout->addRow(QString::fromUtf8(obs_module_text("RecordPath")), pathLayout);
 
-    layout->addLayout(form);
+    layout->addLayout(formLayout);
 
     toggleBtn = new QPushButton(QString::fromUtf8(obs_module_text("StartStream")));
     toggleBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
@@ -110,21 +113,24 @@ void RadioDock::initUI() {
 void RadioDock::loadSettings() {
     QSettings settings("OBSPlugins", "RadioStreamer");
     
-    protocolInput->setCurrentIndex(settings.value("protocol_type", 0).toInt());
+    currentProtocol = settings.value("protocol_type", 0).toInt();
+    protocolInput->setCurrentIndex(currentProtocol);
     
-    urlInput->setText(settings.value("server_url").toString());
+    QString prefix = (currentProtocol == 0) ? "ice_" : "sc_";
     
-    int port = settings.value("server_port", 8000).toInt();
+    urlInput->setText(settings.value(prefix + "server_url").toString());
+    
+    int port = settings.value(prefix + "server_port", 8000).toInt();
     portInput->setValue(port);
     
-    QString mount = settings.value("mountpoint", "/stream").toString();
+    QString mount = settings.value(prefix + "mountpoint", "/stream").toString();
     mountInput->setText(mount);
     
-    userInput->setText(settings.value("username", "source").toString());
+    userInput->setText(settings.value(prefix + "username", "source").toString());
     
-    passInput->setText(settings.value("password").toString());
+    passInput->setText(settings.value(prefix + "password").toString());
     
-    int br = settings.value("bitrate", 128).toInt();
+    int br = settings.value(prefix + "bitrate", 128).toInt();
     bitrateInput->setCurrentText(QString::number(br));
 
     recordCheck->setChecked(settings.value("record_locally", false).toBool());
@@ -139,18 +145,28 @@ void RadioDock::loadSettings() {
         }
     }
     pathDisplay->setText(recordPath);
+
+    bool isIce = (currentProtocol == 0);
+    mountInput->setVisible(isIce);
+    if (formLayout->labelForField(mountInput)) formLayout->labelForField(mountInput)->setVisible(isIce);
+    userInput->setVisible(isIce);
+    if (formLayout->labelForField(userInput)) formLayout->labelForField(userInput)->setVisible(isIce);
 }
 
 void RadioDock::saveSettings() {
     QSettings settings("OBSPlugins", "RadioStreamer");
 
     settings.setValue("protocol_type", protocolInput->currentIndex());
-    settings.setValue("server_url", urlInput->text());
-    settings.setValue("server_port", portInput->value());
-    settings.setValue("mountpoint", mountInput->text());
-    settings.setValue("username", userInput->text());
-    settings.setValue("password", passInput->text());
-    settings.setValue("bitrate", bitrateInput->currentText().toInt());
+    
+    QString prefix = (currentProtocol == 0) ? "ice_" : "sc_";
+    
+    settings.setValue(prefix + "server_url", urlInput->text());
+    settings.setValue(prefix + "server_port", portInput->value());
+    settings.setValue(prefix + "mountpoint", mountInput->text());
+    settings.setValue(prefix + "username", userInput->text());
+    settings.setValue(prefix + "password", passInput->text());
+    settings.setValue(prefix + "bitrate", bitrateInput->currentText().toInt());
+    
     settings.setValue("record_locally", recordCheck->isChecked());
     settings.setValue("record_path", pathDisplay->text());
 }
@@ -231,4 +247,10 @@ void RadioDock::onBrowseClicked() {
         pathDisplay->setText(path);
         recordCheck->setChecked(true);
     }
+}
+
+void RadioDock::onProtocolChanged(int index) {
+    saveSettings(); // Save current state before switching
+    currentProtocol = index;
+    loadSettings(); // Load the data for the new protocol and toggle UI
 }

@@ -114,7 +114,9 @@ void RadioDock::loadSettings() {
     QSettings settings("OBSPlugins", "RadioStreamer");
     
     currentProtocol = settings.value("protocol_type", 0).toInt();
+    protocolInput->blockSignals(true);
     protocolInput->setCurrentIndex(currentProtocol);
+    protocolInput->blockSignals(false);
     
     QString prefix = (currentProtocol == 0) ? "ice_" : "sc_";
     

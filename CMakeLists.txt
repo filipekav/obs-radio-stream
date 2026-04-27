@@ -41,22 +41,15 @@ endif()
 find_package(mp3lame CONFIG)
 if(mp3lame_FOUND)
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE mp3lame::mp3lame)
-  # Extrai a localizacao bruta compilada no VCPKG
-  get_target_property(LAME_LIB_PATH mp3lame::mp3lame IMPORTED_LOCATION_RELEASE)
-  if(NOT LAME_LIB_PATH)
-    get_target_property(LAME_LIB_PATH mp3lame::mp3lame IMPORTED_LOCATION)
-  endif()
 else()
   find_path(LAME_INCLUDE_DIR NAMES lame/lame.h)
   find_library(
     LAME_LIBRARY
-    NAMES mp3lame lame libmp3lame libmp3lame-static mp3lame-static
+    NAMES libmp3lame-static mp3lame-static libmp3lame mp3lame lame
   )
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_INCLUDE_DIR})
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LAME_LIBRARY})
-  set(LAME_LIB_PATH ${LAME_LIBRARY})
 endif()
-
 
 
 target_sources(
@@ -65,31 +58,3 @@ target_sources(
 )
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
-
-if(WIN32)
-  set(EXTERNAL_RUNTIME_DLLS "")
-
-  # Converte o caminho .lib para .dll localizando a pasta bin/ do VCPKG
-  if(LAME_LIB_PATH)
-    string(REGEX REPLACE "\\.lib$" ".dll" LAME_DLL_PATH "${LAME_LIB_PATH}")
-    string(REPLACE "/lib/" "/bin/" LAME_DLL_PATH "${LAME_DLL_PATH}")
-    string(REPLACE "\\lib\\" "\\bin\\" LAME_DLL_PATH "${LAME_DLL_PATH}")
-    if(EXISTS "${LAME_DLL_PATH}")
-      list(APPEND EXTERNAL_RUNTIME_DLLS "${LAME_DLL_PATH}")
-    endif()
-  endif()
-
-
-
-  if(EXTERNAL_RUNTIME_DLLS)
-    # 1. POST_BUILD: Copia apenas as DLLs reais para a pasta local de saída
-    add_custom_command(
-      TARGET ${CMAKE_PROJECT_NAME}
-      POST_BUILD
-      COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${EXTERNAL_RUNTIME_DLLS} "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>"
-    )
-
-    # 2. INSTALL: Empacota apenas as DLLs reais no ZIP
-    install(FILES ${EXTERNAL_RUNTIME_DLLS} DESTINATION "obs-plugins/64bit")
-  endif()
-endif()

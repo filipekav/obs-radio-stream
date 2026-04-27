@@ -14,6 +14,8 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QDir>
+#include <QFileInfo>
+#include <QDateTime>
 #include <iomanip>
 #include <sstream>
 #include <obs-module.h>
@@ -124,7 +126,11 @@ void RadioDock::loadSettings() {
     QString recordPath = settings.value("record_path", "").toString();
     if (recordPath.isEmpty()) {
         QString musicDir = QStandardPaths::writableLocation(QStandardPaths::MusicLocation);
-        recordPath = QDir::cleanPath(musicDir + "/OBS_Radio_Record.mp3");
+        recordPath = QDir::cleanPath(musicDir);
+    } else {
+        if (recordPath.endsWith(".mp3", Qt::CaseInsensitive)) {
+            recordPath = QFileInfo(recordPath).absolutePath();
+        }
     }
     pathDisplay->setText(recordPath);
 }
@@ -156,7 +162,11 @@ void RadioDock::onToggleClicked() {
         obs_data_set_string(out_settings, "password", passInput->text().toUtf8().constData());
         obs_data_set_int(out_settings, "bitrate", bitrateInput->currentText().toInt());
         obs_data_set_bool(out_settings, "record_locally", recordCheck->isChecked());
-        obs_data_set_string(out_settings, "record_path", pathDisplay->text().toUtf8().constData());
+        
+        QString baseDir = pathDisplay->text();
+        QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd-HH-mm-ss");
+        QString finalPath = QDir(baseDir).filePath(timestamp + ".mp3");
+        obs_data_set_string(out_settings, "record_path", finalPath.toUtf8().constData());
         
         obs_output_update(output, out_settings);
         obs_data_release(out_settings);
@@ -207,12 +217,8 @@ void RadioDock::updateStatus() {
 }
 
 void RadioDock::onBrowseClicked() {
-    QString filter = QString::fromUtf8(obs_module_text("MP3Filter"));
-    QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8(obs_module_text("SaveRecordDialogTitle")), "", filter);
+    QString path = QFileDialog::getExistingDirectory(this, QString::fromUtf8(obs_module_text("SaveRecordDialogTitle")), pathDisplay->text(), QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     if (!path.isEmpty()) {
-        if (!path.endsWith(".mp3", Qt::CaseInsensitive)) {
-            path += ".mp3";
-        }
         pathDisplay->setText(path);
         recordCheck->setChecked(true);
     }

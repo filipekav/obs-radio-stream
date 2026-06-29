@@ -10,9 +10,13 @@
 #include <functional>
 #include <fstream>
 
+class QTcpSocket;
+
 class RadioStreamer {
 public:
     std::function<void()> on_disconnect_callback;
+    std::function<void(int attempt, int max)> on_reconnecting_callback;
+    std::function<void()> on_reconnected_callback;
     
     RadioStreamer();
     ~RadioStreamer();
@@ -24,10 +28,12 @@ public:
     
     void push_audio(const uint8_t* data, size_t size);
 
-    bool is_connected() const { return connected.load(); }
+    bool is_connected() const { return stream_connected.load(); }
+    bool is_running() const { return running.load(); }
 
 private:
     void worker_thread();
+    bool attempt_connection(QTcpSocket& socket);
 
     std::string m_host;
     int m_port;
@@ -41,8 +47,12 @@ private:
     
     std::ofstream recordFile;
 
-    std::atomic<bool> connected{false};
+    std::atomic<bool> stream_connected{false};
     std::atomic<bool> running{false};
+    std::atomic<bool> reconnecting{false};
+
+    static constexpr int MAX_RETRIES = 5;
+    static constexpr int RETRY_DELAY_MS = 5000;
 
     std::thread thread_handle;
     

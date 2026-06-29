@@ -148,7 +148,7 @@ static void radio_output_stop(void* data, uint64_t ts) {
 
 static void radio_output_raw_audio(void* data, struct audio_data* frames) {
     auto* ctx = static_cast<radio_output_data*>(data);
-    if (!ctx->lame || !ctx->streamer->is_connected()) return;
+    if (!ctx->lame || !ctx->streamer->is_running()) return;
 
     audio_t* audio = obs_output_audio(ctx->output);
     size_t channels = audio_output_get_channels(audio);

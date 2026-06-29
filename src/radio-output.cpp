@@ -8,8 +8,12 @@ struct radio_output_data {
     RadioStreamer* streamer;
     lame_t lame;
 
-    // Buffer for 16-bit interleaved PCM
+    // Reusable buffers (avoid heap allocation every audio frame)
     std::vector<int16_t> pcm_buffer;
+    std::vector<unsigned char> mp3_buffer;
+    
+    // Cached audio info
+    size_t channels = 0;
     
     // Settings
     std::string host;
@@ -90,7 +94,8 @@ static bool radio_output_start(void* data) {
     }
     
     size_t sample_rate = audio_output_get_sample_rate(audio);
-    size_t channels = audio_output_get_channels(audio);
+    ctx->channels = audio_output_get_channels(audio);
+    size_t channels = ctx->channels;
 
     lame_set_in_samplerate(ctx->lame, static_cast<int>(sample_rate));
     lame_set_num_channels(ctx->lame, static_cast<int>(channels));
@@ -150,8 +155,7 @@ static void radio_output_raw_audio(void* data, struct audio_data* frames) {
     auto* ctx = static_cast<radio_output_data*>(data);
     if (!ctx->lame || !ctx->streamer->is_running()) return;
 
-    audio_t* audio = obs_output_audio(ctx->output);
-    size_t channels = audio_output_get_channels(audio);
+    size_t channels = ctx->channels;
     size_t frames_count = frames->frames;
     
     ctx->pcm_buffer.resize(frames_count * channels);
@@ -169,19 +173,20 @@ static void radio_output_raw_audio(void* data, struct audio_data* frames) {
         }
     }
 
+    // Reuse mp3_buffer from struct to avoid heap allocation every frame
     int mp3_buf_size = static_cast<int>(1.25 * frames_count * channels + 7200);
-    std::vector<unsigned char> mp3_buffer_vec(mp3_buf_size);
+    ctx->mp3_buffer.resize(mp3_buf_size);
 
     int encoded_bytes = lame_encode_buffer_interleaved(
         ctx->lame,
         ctx->pcm_buffer.data(),
         static_cast<int>(frames_count),
-        mp3_buffer_vec.data(),
+        ctx->mp3_buffer.data(),
         mp3_buf_size
     );
 
     if (encoded_bytes > 0) {
-        ctx->streamer->push_audio(mp3_buffer_vec.data(), encoded_bytes);
+        ctx->streamer->push_audio(ctx->mp3_buffer.data(), encoded_bytes);
     }
 }
 

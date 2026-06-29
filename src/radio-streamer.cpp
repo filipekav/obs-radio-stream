@@ -7,12 +7,76 @@
 #include <QNetworkProxy>
 #include <QThread>
 
+// ─── Interruptible wait helpers ──────────────────────────────────────────────
+// Break long blocking waits into short 200ms slots, checking the running flag
+// between each slot. This ensures disconnect() can interrupt any wait within
+// ~200ms instead of waiting up to 15 seconds.
+
+bool RadioStreamer::interruptible_wait_connected(QTcpSocket& socket, int timeout_ms) {
+    int elapsed = 0;
+    while (elapsed < timeout_ms && running.load()) {
+        int wait = std::min(WAIT_SLOT_MS, timeout_ms - elapsed);
+        if (socket.waitForConnected(wait)) return true;
+        // Check if actual error (not just timeout)
+        if (socket.state() == QAbstractSocket::UnconnectedState) return false;
+        elapsed += wait;
+    }
+    return socket.state() == QAbstractSocket::ConnectedState;
+}
+
+bool RadioStreamer::interruptible_wait_bytes_written(QTcpSocket& socket, int timeout_ms) {
+    int elapsed = 0;
+    while (elapsed < timeout_ms && running.load()) {
+        int wait = std::min(WAIT_SLOT_MS, timeout_ms - elapsed);
+        if (socket.waitForBytesWritten(wait)) return true;
+        if (socket.state() == QAbstractSocket::UnconnectedState) return false;
+        elapsed += wait;
+    }
+    return false;
+}
+
+bool RadioStreamer::interruptible_wait_ready_read(QTcpSocket& socket, int timeout_ms) {
+    int elapsed = 0;
+    while (elapsed < timeout_ms && running.load()) {
+        int wait = std::min(WAIT_SLOT_MS, timeout_ms - elapsed);
+        if (socket.waitForReadyRead(wait)) return true;
+        if (socket.state() == QAbstractSocket::UnconnectedState) return false;
+        elapsed += wait;
+    }
+    return false;
+}
+
+// ─── Helper: drain audio queue to local recording file ───────────────────────
+
+void RadioStreamer::drain_queue_to_file() {
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    while (!audio_queue.empty()) {
+        auto& chunk = audio_queue.front();
+        if (recordFile.is_open()) {
+            recordFile.write((const char*)chunk.data(), chunk.size());
+        }
+        audio_queue.pop();
+    }
+}
+
+// ─── Helper: safely close/abort socket ───────────────────────────────────────
+
+void RadioStreamer::cleanup_socket(QTcpSocket& socket) {
+    // abort() is non-blocking and immediately closes the socket,
+    // unlike disconnectFromHost() + waitForDisconnected() which can block.
+    socket.abort();
+}
+
+// ─── Constructor / Destructor ────────────────────────────────────────────────
+
 RadioStreamer::RadioStreamer() {
 }
 
 RadioStreamer::~RadioStreamer() {
     disconnect();
 }
+
+// ─── Connect / Disconnect ────────────────────────────────────────────────────
 
 bool RadioStreamer::connect(const std::string& host, int port, const std::string& mount,
                             const std::string& user, const std::string& pass, int bitrate,
@@ -39,6 +103,7 @@ bool RadioStreamer::connect(const std::string& host, int port, const std::string
 
     stream_connected = false;
     reconnecting = false;
+    record_flush_counter = 0;
     running = true;
     thread_handle = std::thread(&RadioStreamer::worker_thread, this);
 
@@ -62,6 +127,8 @@ void RadioStreamer::disconnect() {
     blog(LOG_INFO, "%s", obs_module_text("LogDisconnected"));
 }
 
+// ─── Push audio (called from OBS audio thread) ──────────────────────────────
+
 void RadioStreamer::push_audio(const uint8_t* data, size_t size) {
     if (!running.load() || !data || size == 0) return;
 
@@ -69,10 +136,20 @@ void RadioStreamer::push_audio(const uint8_t* data, size_t size) {
     
     {
         std::lock_guard<std::mutex> lock(queue_mutex);
+        
+        // Enforce queue size limit to prevent unbounded memory growth.
+        // Drop oldest chunks if queue is full (audio is being produced
+        // faster than it can be consumed, e.g. during reconnection).
+        while (audio_queue.size() >= MAX_QUEUE_SIZE) {
+            audio_queue.pop();
+        }
+        
         audio_queue.push(std::move(buffer));
     }
     queue_cv.notify_one();
 }
+
+// ─── Connection attempt (Icecast / SHOUTcast handshake) ─────────────────────
 
 bool RadioStreamer::attempt_connection(QTcpSocket& socket) {
     // SHOUTcast v1 DNAS: source/DJ clients connect on port+1
@@ -84,19 +161,25 @@ bool RadioStreamer::attempt_connection(QTcpSocket& socket) {
     QString log_mount = (m_protocol_type == 0) ? QString::fromStdString(m_mount) : "";
     blog(LOG_INFO, obs_module_text("LogConnecting"), m_host.c_str(), connect_port, log_mount.toStdString().c_str());
 
-    socket.setProxy(QNetworkProxy::NoProxy);
+    socket.setProxy(QNetworkProxy::NoProxy); // Bypass Windows Proxies
     QString clean_host = QString::fromStdString(m_host).trimmed();
     socket.connectToHost(clean_host, connect_port);
 
-    if (!socket.waitForConnected(15000)) {
+    if (!interruptible_wait_connected(socket, 15000)) {
         blog(LOG_ERROR, obs_module_text("LogErrorConnection"), 
              clean_host.toStdString().c_str(), connect_port, socket.errorString().toStdString().c_str());
-        socket.abort();
+        cleanup_socket(socket);
+        return false;
+    }
+
+    // Early exit if shutting down (connected but running was set to false during wait)
+    if (!running.load()) {
+        cleanup_socket(socket);
         return false;
     }
 
     if (m_protocol_type == 0) {
-        // Icecast / AzuraCast protocol
+        // ── Icecast / AzuraCast protocol ──
         QString auth_str = QString::fromStdString(m_user + ":" + m_pass);
         QByteArray auth_b64 = auth_str.toUtf8().toBase64();
         
@@ -117,13 +200,16 @@ bool RadioStreamer::attempt_connection(QTcpSocket& socket) {
         blog(LOG_INFO, obs_module_text("LogSendingHeader"), header.toStdString().c_str());
 
         socket.write(header.toUtf8());
-        if (!socket.waitForBytesWritten(3000)) {
+        if (!interruptible_wait_bytes_written(socket, 3000)) {
             blog(LOG_ERROR, obs_module_text("LogErrorHeader"), socket.errorString().toStdString().c_str());
+            cleanup_socket(socket);
             return false;
         }
 
-        if (!socket.waitForReadyRead(15000)) {
+        // Leitura e validação da resposta do servidor
+        if (!interruptible_wait_ready_read(socket, 15000)) {
             blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
+            cleanup_socket(socket);
             return false;
         }
 
@@ -134,17 +220,23 @@ bool RadioStreamer::attempt_connection(QTcpSocket& socket) {
         if (!responseStr.contains("200 OK", Qt::CaseInsensitive) && 
             !responseStr.contains("100 Continue", Qt::CaseInsensitive)) {
             blog(LOG_ERROR, "%s", obs_module_text("LogErrorAuth"));
-            socket.disconnectFromHost();
-            socket.abort();
+            cleanup_socket(socket);
             return false;
         }
     } else {
-        // SHOUTcast v1 protocol
+        // ── SHOUTcast v1 protocol ──
         QString pass_header = QString::fromStdString(m_pass).trimmed() + "\r\n";
         socket.write(pass_header.toUtf8());
 
-        if (!socket.waitForBytesWritten(15000) || !socket.waitForReadyRead(15000)) {
+        if (!interruptible_wait_bytes_written(socket, 15000)) {
             blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
+            cleanup_socket(socket);
+            return false;
+        }
+
+        if (!interruptible_wait_ready_read(socket, 15000)) {
+            blog(LOG_ERROR, obs_module_text("LogErrorTimeout"), socket.errorString().toStdString().c_str());
+            cleanup_socket(socket);
             return false;
         }
 
@@ -154,8 +246,7 @@ bool RadioStreamer::attempt_connection(QTcpSocket& socket) {
 
         if (!responseStr.contains("OK2", Qt::CaseInsensitive)) {
             blog(LOG_ERROR, "%s", obs_module_text("LogErrorAuth"));
-            socket.disconnectFromHost();
-            socket.abort();
+            cleanup_socket(socket);
             return false;
         }
 
@@ -165,16 +256,50 @@ bool RadioStreamer::attempt_connection(QTcpSocket& socket) {
                                       "icy-br: %1\r\n"
                                       "icy-pub: 0\r\n\r\n").arg(m_bitrate);
         socket.write(icy_headers.toUtf8());
-        socket.waitForBytesWritten(5000);
+        interruptible_wait_bytes_written(socket, 5000);
     }
 
     return true;
 }
 
+// ─── Helper: reconnection loop ──────────────────────────────────────────────
+
+bool RadioStreamer::try_reconnect(QTcpSocket& socket) {
+    if (recordFile.is_open()) {
+        blog(LOG_INFO, "%s", obs_module_text("LogRecordingContinues"));
+    }
+
+    for (int attempt = 1; attempt <= MAX_RETRIES && running.load(); ++attempt) {
+        reconnecting = true;
+        blog(LOG_INFO, obs_module_text("LogReconnecting"), attempt, MAX_RETRIES);
+        if (on_reconnecting_callback) on_reconnecting_callback(attempt, MAX_RETRIES);
+
+        // Wait before retry, draining audio to local file during wait
+        for (int waited = 0; waited < RETRY_DELAY_MS && running.load(); waited += 100) {
+            QThread::msleep(100);
+            drain_queue_to_file();
+        }
+        if (!running.load()) break;
+
+        if (attempt_connection(socket)) {
+            reconnecting = false;
+            stream_connected = true;
+            blog(LOG_INFO, "%s", obs_module_text("LogReconnected"));
+            if (on_reconnected_callback) on_reconnected_callback();
+            return true;
+        }
+    }
+
+    reconnecting = false;
+    return false;
+}
+
+// ─── Worker thread (main loop) ──────────────────────────────────────────────
+
 void RadioStreamer::worker_thread() {
     QTcpSocket socket;
 
-    // Open local recording file (independent of streaming)
+    // Open local recording file (independent of streaming connection)
     if (m_record && !m_path.empty()) {
         recordFile.open(m_path, std::ios::binary);
         if (!recordFile.is_open()) {
@@ -186,51 +311,13 @@ void RadioStreamer::worker_thread() {
 
     // Initial connection attempt
     if (!attempt_connection(socket)) {
-        // Initial connection failed — still keep recording if enabled
-        if (recordFile.is_open()) {
-            blog(LOG_INFO, "%s", obs_module_text("LogRecordingContinues"));
-        }
-        
-        // Try reconnecting before giving up entirely
-        bool reconnected = false;
-        for (int attempt = 1; attempt <= MAX_RETRIES && running.load(); ++attempt) {
-            reconnecting = true;
-            blog(LOG_INFO, obs_module_text("LogReconnecting"), attempt, MAX_RETRIES);
-            if (on_reconnecting_callback) on_reconnecting_callback(attempt, MAX_RETRIES);
-
-            // Wait before retry, draining audio to local file
-            for (int waited = 0; waited < RETRY_DELAY_MS && running.load(); waited += 100) {
-                QThread::msleep(100);
-                
-                // Drain queue to local file during wait
-                {
-                    std::lock_guard<std::mutex> lock(queue_mutex);
-                    while (!audio_queue.empty()) {
-                        auto& queued = audio_queue.front();
-                        if (recordFile.is_open()) {
-                            recordFile.write((const char*)queued.data(), queued.size());
-                        }
-                        audio_queue.pop();
-                    }
-                }
-            }
-            if (!running.load()) break;
-
-            if (attempt_connection(socket)) {
-                reconnected = true;
-                reconnecting = false;
-                stream_connected = true;
-                blog(LOG_INFO, "%s", obs_module_text("LogReconnected"));
-                if (on_reconnected_callback) on_reconnected_callback();
-                break;
-            }
-        }
-
-        if (!reconnected) {
-            reconnecting = false;
+        // Connection failed — try reconnecting
+        if (!try_reconnect(socket)) {
+            // All retries exhausted
             running = false;
             stream_connected = false;
             if (recordFile.is_open()) {
+                recordFile.flush();
                 recordFile.close();
                 blog(LOG_INFO, "%s", obs_module_text("LogRecordingFinished"));
             }
@@ -241,7 +328,7 @@ void RadioStreamer::worker_thread() {
         stream_connected = true;
     }
 
-    // Main audio loop
+    // ── Main audio loop ──
     while (running.load()) {
         std::vector<uint8_t> chunk;
         
@@ -257,86 +344,46 @@ void RadioStreamer::worker_thread() {
             }
         }
 
-        if (!chunk.empty()) {
-            // Always write to local recording regardless of stream state
-            if (recordFile.is_open()) {
-                recordFile.write((const char*)chunk.data(), chunk.size());
+        if (chunk.empty()) continue;
+
+        // Always write to local recording regardless of stream state
+        if (recordFile.is_open()) {
+            recordFile.write((const char*)chunk.data(), chunk.size());
+            
+            // Periodic flush to prevent data loss on crash
+            if (++record_flush_counter >= FLUSH_INTERVAL) {
+                recordFile.flush();
+                record_flush_counter = 0;
             }
+        }
 
-            // Only send to socket if stream is connected
-            if (stream_connected.load()) {
-                socket.write((const char*)chunk.data(), chunk.size());
-                if (!socket.waitForBytesWritten(3000)) {
-                    blog(LOG_ERROR, obs_module_text("LogErrorSocketWrite"), socket.errorString().toStdString().c_str());
-                    stream_connected = false;
+        // Only send to socket if stream is connected
+        if (!stream_connected.load()) continue;
 
-                    // Close broken socket
-                    socket.disconnectFromHost();
-                    if (socket.state() != QAbstractSocket::UnconnectedState) {
-                        socket.waitForDisconnected(1000);
-                    }
+        socket.write((const char*)chunk.data(), chunk.size());
+        if (!interruptible_wait_bytes_written(socket, 3000)) {
+            blog(LOG_ERROR, obs_module_text("LogErrorSocketWrite"), socket.errorString().toStdString().c_str());
+            stream_connected = false;
+            cleanup_socket(socket);
 
-                    if (recordFile.is_open()) {
-                        blog(LOG_INFO, "%s", obs_module_text("LogRecordingContinues"));
-                    }
-
-                    // Reconnection loop
-                    bool reconnected = false;
-                    for (int attempt = 1; attempt <= MAX_RETRIES && running.load(); ++attempt) {
-                        reconnecting = true;
-                        blog(LOG_INFO, obs_module_text("LogReconnecting"), attempt, MAX_RETRIES);
-                        if (on_reconnecting_callback) on_reconnecting_callback(attempt, MAX_RETRIES);
-
-                        // Wait before retry, draining audio to local file
-                        for (int waited = 0; waited < RETRY_DELAY_MS && running.load(); waited += 100) {
-                            QThread::msleep(100);
-                            
-                            // Drain queue to local file during wait
-                            {
-                                std::lock_guard<std::mutex> lock(queue_mutex);
-                                while (!audio_queue.empty()) {
-                                    auto& queued = audio_queue.front();
-                                    if (recordFile.is_open()) {
-                                        recordFile.write((const char*)queued.data(), queued.size());
-                                    }
-                                    audio_queue.pop();
-                                }
-                            }
-                        }
-                        if (!running.load()) break;
-
-                        if (attempt_connection(socket)) {
-                            reconnected = true;
-                            reconnecting = false;
-                            stream_connected = true;
-                            blog(LOG_INFO, "%s", obs_module_text("LogReconnected"));
-                            if (on_reconnected_callback) on_reconnected_callback();
-                            break;
-                        }
-                    }
-
-                    if (!reconnected) {
-                        reconnecting = false;
-                        blog(LOG_ERROR, "%s", obs_module_text("LogReconnectFailed"));
-                        if (on_disconnect_callback) on_disconnect_callback();
-                        break;
-                    }
-                }
+            // Try reconnecting
+            if (!try_reconnect(socket)) {
+                blog(LOG_ERROR, "%s", obs_module_text("LogReconnectFailed"));
+                if (on_disconnect_callback) on_disconnect_callback();
+                break;
             }
+            // Reconnected — continue to next chunk
         }
     }
     
-    // Cleanup: disconnect socket
+    // ── Cleanup ──
     if (stream_connected.load()) {
-        socket.disconnectFromHost();
-        if (socket.state() != QAbstractSocket::UnconnectedState) {
-             socket.waitForDisconnected(1000);
-        }
+        cleanup_socket(socket);
     }
     stream_connected = false;
     
-    // Close local recording
     if (recordFile.is_open()) {
+        recordFile.flush();
         recordFile.close();
         blog(LOG_INFO, "%s", obs_module_text("LogRecordingFinished"));
     }

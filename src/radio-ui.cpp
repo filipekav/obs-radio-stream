@@ -79,9 +79,6 @@ void RadioDock::initUI() {
     bitrateInput->setCurrentText("128");
     formLayout->addRow(QString::fromUtf8(obs_module_text("Bitrate")), bitrateInput);
 
-    recordCheck = new QCheckBox(QString::fromUtf8(obs_module_text("RecordLocally")));
-    formLayout->addRow("", recordCheck);
-
     QHBoxLayout* pathLayout = new QHBoxLayout();
     pathDisplay = new QLineEdit();
     pathDisplay->setReadOnly(true);
@@ -92,21 +89,36 @@ void RadioDock::initUI() {
 
     layout->addLayout(formLayout);
 
-    toggleBtn = new QPushButton(QString::fromUtf8(obs_module_text("StartStream")));
-    toggleBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
-    layout->addWidget(toggleBtn);
-
+    // ── Stream Controls ──
+    QHBoxLayout* streamBtnLayout = new QHBoxLayout();
+    toggleStreamBtn = new QPushButton(QString::fromUtf8(obs_module_text("StartStream")));
+    toggleStreamBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
     statusLabel = new QLabel(QString::fromUtf8(obs_module_text("StatusOffline")));
-    statusLabel->setAlignment(Qt::AlignCenter);
+    statusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     QFont f = statusLabel->font();
     f.setBold(true);
-    f.setPointSize(12);
     statusLabel->setFont(f);
-    layout->addWidget(statusLabel);
     
+    streamBtnLayout->addWidget(toggleStreamBtn, 2);
+    streamBtnLayout->addWidget(statusLabel, 3);
+    layout->addLayout(streamBtnLayout);
+
+    // ── Record Controls ──
+    QHBoxLayout* recordBtnLayout = new QHBoxLayout();
+    toggleRecordBtn = new QPushButton(QString::fromUtf8(obs_module_text("StartRecord")));
+    toggleRecordBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+    recordStatusLabel = new QLabel(QString::fromUtf8(obs_module_text("StatusOffline")));
+    recordStatusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    recordStatusLabel->setFont(f);
+    
+    recordBtnLayout->addWidget(toggleRecordBtn, 2);
+    recordBtnLayout->addWidget(recordStatusLabel, 3);
+    layout->addLayout(recordBtnLayout);
+
     layout->addStretch();
 
-    connect(toggleBtn, &QPushButton::clicked, this, &RadioDock::onToggleClicked);
+    connect(toggleStreamBtn, &QPushButton::clicked, this, &RadioDock::onToggleStreamClicked);
+    connect(toggleRecordBtn, &QPushButton::clicked, this, &RadioDock::onToggleRecordClicked);
     connect(browseBtn, &QPushButton::clicked, this, &RadioDock::onBrowseClicked);
 }
 
@@ -134,8 +146,6 @@ void RadioDock::loadSettings() {
     
     int br = settings.value(prefix + "bitrate", 128).toInt();
     bitrateInput->setCurrentText(QString::number(br));
-
-    recordCheck->setChecked(settings.value("record_locally", false).toBool());
 
     QString recordPath = settings.value("record_path", "").toString();
     if (recordPath.isEmpty()) {
@@ -169,17 +179,29 @@ void RadioDock::saveSettings() {
     settings.setValue(prefix + "password", passInput->text());
     settings.setValue(prefix + "bitrate", bitrateInput->currentText().toInt());
     
-    settings.setValue("record_locally", recordCheck->isChecked());
     settings.setValue("record_path", pathDisplay->text());
 }
 
-void RadioDock::onToggleClicked() {
-    if (obs_output_active(output)) {
-        obs_output_stop(output);
+void RadioDock::onToggleStreamClicked() {
+    if (streamingActive) {
+        streamingActive = false;
+        if (!recordingActive) {
+            obs_output_stop(output);
+        } else {
+            obs_data_t* out_settings = obs_output_get_settings(output);
+            obs_data_set_bool(out_settings, "stream_active", false);
+            obs_output_update(output, out_settings);
+            obs_data_release(out_settings);
+        }
     } else {
         saveSettings();
+        streamingActive = true;
+        streamStartTime = std::chrono::steady_clock::now();
 
-        obs_data_t* out_settings = obs_data_create();
+        obs_data_t* out_settings = obs_output_get_settings(output);
+        if (!out_settings) {
+            out_settings = obs_data_create();
+        }
         obs_data_set_int(out_settings, "protocol_type", protocolInput->currentIndex());
         obs_data_set_string(out_settings, "server_url", urlInput->text().toUtf8().constData());
         obs_data_set_int(out_settings, "server_port", portInput->value());
@@ -187,18 +209,69 @@ void RadioDock::onToggleClicked() {
         obs_data_set_string(out_settings, "username", userInput->text().toUtf8().constData());
         obs_data_set_string(out_settings, "password", passInput->text().toUtf8().constData());
         obs_data_set_int(out_settings, "bitrate", bitrateInput->currentText().toInt());
-        obs_data_set_bool(out_settings, "record_locally", recordCheck->isChecked());
-        
+        obs_data_set_bool(out_settings, "stream_active", true);
+        obs_data_set_bool(out_settings, "record_active", recordingActive);
+
+        QString baseDir = pathDisplay->text();
+        if (recordingActive) {
+            const char* existing_path = obs_data_get_string(out_settings, "record_path");
+            if (!existing_path || strlen(existing_path) == 0) {
+                QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd-HH-mm-ss");
+                QString finalPath = QDir(baseDir).filePath(timestamp + ".mp3");
+                obs_data_set_string(out_settings, "record_path", finalPath.toUtf8().constData());
+            }
+        }
+
+        obs_output_update(output, out_settings);
+
+        if (!obs_output_active(output)) {
+            obs_output_start(output);
+        }
+        obs_data_release(out_settings);
+    }
+}
+
+void RadioDock::onToggleRecordClicked() {
+    if (recordingActive) {
+        recordingActive = false;
+        if (!streamingActive) {
+            obs_output_stop(output);
+        } else {
+            obs_data_t* out_settings = obs_output_get_settings(output);
+            obs_data_set_bool(out_settings, "record_active", false);
+            obs_output_update(output, out_settings);
+            obs_data_release(out_settings);
+        }
+    } else {
+        saveSettings();
+        recordingActive = true;
+        recordStartTime = std::chrono::steady_clock::now();
+
+        obs_data_t* out_settings = obs_output_get_settings(output);
+        if (!out_settings) {
+            out_settings = obs_data_create();
+        }
+        obs_data_set_int(out_settings, "protocol_type", protocolInput->currentIndex());
+        obs_data_set_string(out_settings, "server_url", urlInput->text().toUtf8().constData());
+        obs_data_set_int(out_settings, "server_port", portInput->value());
+        obs_data_set_string(out_settings, "mountpoint", mountInput->text().toUtf8().constData());
+        obs_data_set_string(out_settings, "username", userInput->text().toUtf8().constData());
+        obs_data_set_string(out_settings, "password", passInput->text().toUtf8().constData());
+        obs_data_set_int(out_settings, "bitrate", bitrateInput->currentText().toInt());
+        obs_data_set_bool(out_settings, "stream_active", streamingActive);
+        obs_data_set_bool(out_settings, "record_active", true);
+
         QString baseDir = pathDisplay->text();
         QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd-HH-mm-ss");
         QString finalPath = QDir(baseDir).filePath(timestamp + ".mp3");
         obs_data_set_string(out_settings, "record_path", finalPath.toUtf8().constData());
-        
+
         obs_output_update(output, out_settings);
+
+        if (!obs_output_active(output)) {
+            obs_output_start(output);
+        }
         obs_data_release(out_settings);
-        
-        startTime = std::chrono::steady_clock::now();
-        obs_output_start(output);
     }
 }
 
@@ -206,53 +279,99 @@ void RadioDock::updateStatus() {
     if (!output) return;
 
     bool active = obs_output_active(output);
-    
-    if (active) {
+    RadioStreamer* streamer = RadioStreamer::get_active_streamer();
+
+    if (!active) {
+        streamingActive = false;
+        recordingActive = false;
+    } else {
+        if (streamer) {
+            // Keep the active states synced with the actual streamer state
+            streamingActive = streamer->is_running() && (streamer->is_connected() || streamer->is_reconnecting());
+            recordingActive = streamer->is_recording();
+        }
+    }
+
+    // ── Update Stream Status UI ──
+    if (streamingActive) {
+        if (streamer && streamer->is_reconnecting()) {
+            int attempt = streamer->get_reconnect_attempt();
+            int max = streamer->get_reconnect_max();
+            QString text = QString::fromUtf8(obs_module_text("StatusReconnecting")) + QString(" (%1/%2)").arg(attempt).arg(max);
+            statusLabel->setText(text);
+            statusLabel->setStyleSheet("color: #ffc107;");
+        } else {
+            auto now = std::chrono::steady_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - streamStartTime).count();
+            int hours = duration / 3600;
+            int minutes = (duration % 3600) / 60;
+            int seconds = duration % 60;
+            
+            std::stringstream ss;
+            ss << obs_module_text("StatusLive") << " (" << std::setfill('0') << std::setw(2) << hours << ":" 
+               << std::setfill('0') << std::setw(2) << minutes << ":" 
+               << std::setfill('0') << std::setw(2) << seconds << ")";
+               
+            statusLabel->setText(QString::fromStdString(ss.str()));
+            statusLabel->setStyleSheet("color: #28a745;");
+        }
+
+        toggleStreamBtn->setText(QString::fromUtf8(obs_module_text("StopStream")));
+        toggleStreamBtn->setStyleSheet("background-color: #dc3545; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+    } else {
+        statusLabel->setText(QString::fromUtf8(obs_module_text("StatusOffline")));
+        statusLabel->setStyleSheet("color: #dc3545;");
+
+        toggleStreamBtn->setText(QString::fromUtf8(obs_module_text("StartStream")));
+        toggleStreamBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+    }
+
+    // ── Update Record Status UI ──
+    if (recordingActive) {
         auto now = std::chrono::steady_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - recordStartTime).count();
         int hours = duration / 3600;
         int minutes = (duration % 3600) / 60;
         int seconds = duration % 60;
         
         std::stringstream ss;
-        ss << obs_module_text("StatusLive") << " (" << std::setfill('0') << std::setw(2) << hours << ":" 
+        ss << obs_module_text("StatusRecording") << " (" << std::setfill('0') << std::setw(2) << hours << ":" 
            << std::setfill('0') << std::setw(2) << minutes << ":" 
            << std::setfill('0') << std::setw(2) << seconds << ")";
            
-        statusLabel->setText(QString::fromStdString(ss.str()));
-        statusLabel->setStyleSheet("color: #28a745;");
+        recordStatusLabel->setText(QString::fromStdString(ss.str()));
+        recordStatusLabel->setStyleSheet("color: #28a745;");
 
-        toggleBtn->setText(QString::fromUtf8(obs_module_text("StopStream")));
-        toggleBtn->setStyleSheet("background-color: #dc3545; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+        toggleRecordBtn->setText(QString::fromUtf8(obs_module_text("StopRecord")));
+        toggleRecordBtn->setStyleSheet("background-color: #dc3545; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
     } else {
-        statusLabel->setText(QString::fromUtf8(obs_module_text("StatusOffline")));
-        statusLabel->setStyleSheet("color: #dc3545;");
+        recordStatusLabel->setText(QString::fromUtf8(obs_module_text("StatusOffline")));
+        recordStatusLabel->setStyleSheet("color: #dc3545;");
 
-        toggleBtn->setText(QString::fromUtf8(obs_module_text("StartStream")));
-        toggleBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+        toggleRecordBtn->setText(QString::fromUtf8(obs_module_text("StartRecord")));
+        toggleRecordBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
     }
-    
-    protocolInput->setEnabled(!active);
-    urlInput->setEnabled(!active);
-    portInput->setEnabled(!active);
-    mountInput->setEnabled(!active);
-    userInput->setEnabled(!active);
-    passInput->setEnabled(!active);
-    bitrateInput->setEnabled(!active);
-    recordCheck->setEnabled(!active);
-    browseBtn->setEnabled(!active);
+
+    bool running = streamingActive || recordingActive;
+    protocolInput->setEnabled(!running);
+    urlInput->setEnabled(!running);
+    portInput->setEnabled(!running);
+    mountInput->setEnabled(!running);
+    userInput->setEnabled(!running);
+    passInput->setEnabled(!running);
+    bitrateInput->setEnabled(!running);
+    browseBtn->setEnabled(!running);
 }
 
 void RadioDock::onBrowseClicked() {
     QString path = QFileDialog::getExistingDirectory(this, QString::fromUtf8(obs_module_text("SaveRecordDialogTitle")), pathDisplay->text(), QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
     if (!path.isEmpty()) {
         pathDisplay->setText(path);
-        recordCheck->setChecked(true);
     }
 }
 
 void RadioDock::onProtocolChanged(int index) {
-    saveSettings(); // Save current state before switching
+    saveSettings();
     currentProtocol = index;
-    loadSettings(); // Load the data for the new protocol and toggle UI
+    loadSettings();
 }

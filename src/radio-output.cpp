@@ -56,12 +56,17 @@ static void radio_output_update(void* data, obs_data_t* settings) {
     if (ctx->user.empty()) ctx->user = "source";
     ctx->pass = obs_data_get_string(settings, "password");
     ctx->bitrate = static_cast<int>(obs_data_get_int(settings, "bitrate"));
-    ctx->record_locally = obs_data_get_bool(settings, "record_locally");
+    ctx->record_locally = obs_data_get_bool(settings, "record_active");
     ctx->record_path = obs_data_get_string(settings, "record_path");
     ctx->protocol_type = static_cast<int>(obs_data_get_int(settings, "protocol_type"));
+    bool stream_active = obs_data_get_bool(settings, "stream_active");
     
     if (ctx->port == 0) ctx->port = 8000;
     if (ctx->bitrate == 0) ctx->bitrate = 128;
+
+    if (ctx->streamer->is_running()) {
+        ctx->streamer->start(ctx->host, ctx->port, ctx->mount, ctx->user, ctx->pass, ctx->bitrate, ctx->protocol_type, stream_active, ctx->record_locally, ctx->record_path);
+    }
 }
 
 static bool radio_output_start(void* data) {
@@ -72,6 +77,24 @@ static bool radio_output_start(void* data) {
         blog(LOG_ERROR, "%s", obs_module_text("ErrorCapture"));
         return false;
     }
+
+    obs_data_t* settings = obs_output_get_settings(ctx->output);
+    bool stream_active = obs_data_get_bool(settings, "stream_active");
+    bool record_active = obs_data_get_bool(settings, "record_active");
+    ctx->record_locally = record_active;
+    
+    ctx->host = obs_data_get_string(settings, "server_url");
+    ctx->port = static_cast<int>(obs_data_get_int(settings, "server_port"));
+    ctx->mount = obs_data_get_string(settings, "mountpoint");
+    ctx->user = obs_data_get_string(settings, "username");
+    if (ctx->user.empty()) ctx->user = "source";
+    ctx->pass = obs_data_get_string(settings, "password");
+    ctx->bitrate = static_cast<int>(obs_data_get_int(settings, "bitrate"));
+    ctx->record_path = obs_data_get_string(settings, "record_path");
+    ctx->protocol_type = static_cast<int>(obs_data_get_int(settings, "protocol_type"));
+    if (ctx->port == 0) ctx->port = 8000;
+    if (ctx->bitrate == 0) ctx->bitrate = 128;
+    obs_data_release(settings);
 
     if (ctx->lame) {
         lame_close(ctx->lame);
@@ -104,12 +127,28 @@ static bool radio_output_start(void* data) {
     lame_init_params(ctx->lame);
 
     ctx->streamer->on_disconnect_callback = [output = ctx->output]() {
+        // Only stop OBS capture if both streaming and recording are stopped.
+        // Wait, if streamer stops streaming due to disconnect/error, we should notify the UI.
+        // But we don't necessarily want to force obs_output_signal_stop unless both are inactive,
+        // or we can signal stop which will stop everything.
+        // Actually, if connection fails completely and we disconnect, we can let UI know.
+        // Wait! In our new logic, if connection fails, should we stop the whole output?
+        // No! If recording is active, we should NOT call obs_output_signal_stop!
+        // Instead, we just set m_stream_active to false in streamer (which we did),
+        // and UI will see the state of stream changed.
+        // Wait, if both are inactive, we stop.
+        // Let's check: on_disconnect_callback is called when reconnection fails completely.
+        // We can check if recording is active inside the callback or do it inside the streamer thread.
+        // In the streamer thread: if connection fails, and recording is NOT active, it shuts down and calls on_disconnect_callback.
+        // If recording IS active, on_disconnect_callback is NOT called, only stream stops.
+        // So on_disconnect_callback will only be called if the streamer is completely shutting down!
+        // That is perfect!
         std::thread([output]() {
             obs_output_signal_stop(output, OBS_OUTPUT_ERROR);
         }).detach();
     };
 
-    if (!ctx->streamer->connect(ctx->host, ctx->port, ctx->mount, ctx->user, ctx->pass, ctx->bitrate, ctx->record_locally, ctx->record_path, ctx->protocol_type)) {
+    if (!ctx->streamer->start(ctx->host, ctx->port, ctx->mount, ctx->user, ctx->pass, ctx->bitrate, ctx->protocol_type, stream_active, record_active, ctx->record_path)) {
         lame_close(ctx->lame);
         ctx->lame = nullptr;
         return false;

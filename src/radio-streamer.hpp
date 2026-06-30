@@ -21,17 +21,25 @@ public:
     RadioStreamer();
     ~RadioStreamer();
 
-    bool connect(const std::string& host, int port, const std::string& mount,
-                 const std::string& user, const std::string& pass, int bitrate,
-                 bool recordLocally, const std::string& recordingPath, int protocol_type);
+    bool start(const std::string& host, int port, const std::string& mount,
+               const std::string& user, const std::string& pass, int bitrate,
+               int protocol_type, bool stream, bool record, const std::string& recordPath);
+    void update_state(bool stream, bool record, const std::string& recordPath = "");
     void disconnect();
     
     void push_audio(const uint8_t* data, size_t size);
 
     bool is_connected() const { return stream_connected.load(); }
+    bool is_recording() const { return recording_active.load(); }
+    bool is_reconnecting() const { return reconnecting.load(); }
+    int get_reconnect_attempt() const { return reconnect_attempt.load(); }
+    int get_reconnect_max() const { return MAX_RETRIES; }
     bool is_running() const { return running.load(); }
 
+    static RadioStreamer* get_active_streamer() { return s_active_streamer; }
+
 private:
+    static RadioStreamer* s_active_streamer;
     void worker_thread();
     bool attempt_connection(QTcpSocket& socket);
     void drain_queue_to_file();
@@ -44,13 +52,13 @@ private:
     bool interruptible_wait_bytes_written(QTcpSocket& socket, int timeout_ms);
     bool interruptible_wait_ready_read(QTcpSocket& socket, int timeout_ms);
 
+    std::mutex settings_mutex;
     std::string m_host;
     int m_port = 0;
     std::string m_mount;
     std::string m_user;
     std::string m_pass;
     int m_bitrate = 128;
-    bool m_record = false;
     std::string m_path;
     int m_protocol_type = 0;
     
@@ -58,8 +66,13 @@ private:
     int record_flush_counter = 0;
 
     std::atomic<bool> stream_connected{false};
+    std::atomic<bool> recording_active{false};
     std::atomic<bool> running{false};
     std::atomic<bool> reconnecting{false};
+    std::atomic<int> reconnect_attempt{0};
+    
+    std::atomic<bool> m_stream_active{false};
+    std::atomic<bool> m_record_active{false};
 
     static constexpr int MAX_RETRIES = 5;
     static constexpr int RETRY_DELAY_MS = 5000;

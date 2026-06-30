@@ -22,7 +22,8 @@ public:
     ~RadioDock();
 
 private slots:
-    void onToggleClicked();
+    void onToggleStreamClicked();
+    void onToggleRecordClicked();
     void onBrowseClicked();
     void updateStatus();
     void onProtocolChanged(int index);
@@ -40,18 +41,23 @@ private:
     QLineEdit* passInput;
     QComboBox* bitrateInput;
 
-    QCheckBox* recordCheck;
     QLineEdit* pathDisplay;
     QPushButton* browseBtn;
 
-    QPushButton* toggleBtn;
+    QPushButton* toggleStreamBtn;
+    QPushButton* toggleRecordBtn;
     QLabel* statusLabel;
+    QLabel* recordStatusLabel;
 
-    std::chrono::steady_clock::time_point startTime;
+    std::chrono::steady_clock::time_point streamStartTime;
+    std::chrono::steady_clock::time_point recordStartTime;
 
     QTimer* statusTimer;
     obs_output_t* output;
 
     class QFormLayout* formLayout;
     int currentProtocol;
+    
+    bool streamingActive = false;
+    bool recordingActive = false;
 };

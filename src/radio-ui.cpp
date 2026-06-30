@@ -9,9 +9,11 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
-#include <QCheckBox>
 #include <QFileDialog>
 #include <QTimer>
+#include <QTabWidget>
+#include <QScrollArea>
+#include <QGroupBox>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QDir>
@@ -44,82 +46,125 @@ RadioDock::~RadioDock() {
 }
 
 void RadioDock::initUI() {
-    QVBoxLayout* layout = new QVBoxLayout(this);
+    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(4, 4, 4, 4);
+    mainLayout->setSpacing(4);
 
-    formLayout = new QFormLayout();
+    tabWidget = new QTabWidget(this);
+    tabWidget->setStyleSheet("QTabWidget::pane { border: 1px solid #3c3c3c; top: -1px; } "
+                             "QTabBar::tab { background: #262626; color: #aaaaaa; padding: 6px 12px; border: 1px solid #3c3c3c; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; } "
+                             "QTabBar::tab:selected { background: #3c3c3c; color: #ffffff; }");
+
+    // ── Aba 1: Painel (Broadcast Controls) ──
+    QWidget* panelTab = new QWidget();
+    QVBoxLayout* panelLayout = new QVBoxLayout(panelTab);
+    panelLayout->setContentsMargins(8, 8, 8, 8);
+    panelLayout->setSpacing(12);
+
+    // Group Box de Monitoramento
+    QGroupBox* statsGroup = new QGroupBox(QString::fromUtf8("Monitoramento de Status"), panelTab);
+    statsGroup->setStyleSheet("QGroupBox { font-weight: bold; border: 1px solid #3c3c3c; border-radius: 6px; margin-top: 10px; padding-top: 10px; } "
+                              "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 10px; padding: 0 3px; }");
     
-    protocolInput = new QComboBox();
+    QFormLayout* statsLayout = new QFormLayout(statsGroup);
+    statsLayout->setContentsMargins(10, 10, 10, 10);
+    statsLayout->setSpacing(8);
+
+    // Stream Status
+    statusLabel = new QLabel(QString::fromUtf8("⚪ Desconectado"), statsGroup);
+    statusLabel->setStyleSheet("font-size: 11pt; font-weight: bold; color: #aaaaaa;");
+    statsLayout->addRow(QString::fromUtf8("📡 Transmissão:"), statusLabel);
+
+    // Record Status
+    recordStatusLabel = new QLabel(QString::fromUtf8("⚪ Inativo"), statsGroup);
+    recordStatusLabel->setStyleSheet("font-size: 11pt; font-weight: bold; color: #aaaaaa;");
+    statsLayout->addRow(QString::fromUtf8("🔴 Gravação:"), recordStatusLabel);
+
+    panelLayout->addWidget(statsGroup);
+
+    // Separador ou espaço flexível
+    panelLayout->addStretch();
+
+    // Botão de Stream
+    toggleStreamBtn = new QPushButton(QString::fromUtf8("📡 Iniciar Transmissão"), panelTab);
+    toggleStreamBtn->setMinimumHeight(38);
+    toggleStreamBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 10pt; border-radius: 4px; padding: 6px; }");
+    panelLayout->addWidget(toggleStreamBtn);
+
+    // Botão de Record
+    toggleRecordBtn = new QPushButton(QString::fromUtf8("🔴 Iniciar Gravação"), panelTab);
+    toggleRecordBtn->setMinimumHeight(38);
+    toggleRecordBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 10pt; border-radius: 4px; padding: 6px; }");
+    panelLayout->addWidget(toggleRecordBtn);
+
+    // Botão Misto (Ambos)
+    toggleBothBtn = new QPushButton(QString::fromUtf8("⚡ Iniciar Ambos"), panelTab);
+    toggleBothBtn->setMinimumHeight(38);
+    toggleBothBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 10pt; border-radius: 4px; padding: 6px; }");
+    panelLayout->addWidget(toggleBothBtn);
+
+    tabWidget->addTab(panelTab, QString::fromUtf8("📡 Painel"));
+
+    // ── Aba 2: Configurações (Settings form) ──
+    QScrollArea* scrollArea = new QScrollArea(this);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet("QScrollArea { background: transparent; }");
+
+    QWidget* settingsTab = new QWidget();
+    scrollArea->setWidget(settingsTab);
+
+    formLayout = new QFormLayout(settingsTab);
+    formLayout->setContentsMargins(8, 8, 8, 8);
+    formLayout->setSpacing(8);
+    
+    protocolInput = new QComboBox(settingsTab);
     protocolInput->addItems({"Icecast / AzuraCast", "SHOUTcast (v1)"});
-    formLayout->addRow("Protocol:", protocolInput);
+    formLayout->addRow(QString::fromUtf8("Protocolo:"), protocolInput);
     
     connect(protocolInput, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &RadioDock::onProtocolChanged);
     currentProtocol = 0;
     
-    urlInput = new QLineEdit();
+    urlInput = new QLineEdit(settingsTab);
     formLayout->addRow(QString::fromUtf8(obs_module_text("ServerUrl")), urlInput);
     
-    portInput = new QSpinBox();
+    portInput = new QSpinBox(settingsTab);
     portInput->setRange(1, 65535);
     portInput->setValue(8000);
     formLayout->addRow(QString::fromUtf8(obs_module_text("ServerPort")), portInput);
     
-    mountInput = new QLineEdit();
+    mountInput = new QLineEdit(settingsTab);
     mountInput->setText("/stream");
     formLayout->addRow(QString::fromUtf8(obs_module_text("Mountpoint")), mountInput);
     
-    userInput = new QLineEdit();
+    userInput = new QLineEdit(settingsTab);
     userInput->setText("source");
     formLayout->addRow(QString::fromUtf8(obs_module_text("Username")), userInput);
     
-    passInput = new QLineEdit();
+    passInput = new QLineEdit(settingsTab);
     passInput->setEchoMode(QLineEdit::Password);
     formLayout->addRow(QString::fromUtf8(obs_module_text("Password")), passInput);
     
-    bitrateInput = new QComboBox();
+    bitrateInput = new QComboBox(settingsTab);
     bitrateInput->addItems({"64", "96", "128", "192", "320"});
     bitrateInput->setCurrentText("128");
     formLayout->addRow(QString::fromUtf8(obs_module_text("Bitrate")), bitrateInput);
 
     QHBoxLayout* pathLayout = new QHBoxLayout();
-    pathDisplay = new QLineEdit();
+    pathDisplay = new QLineEdit(settingsTab);
     pathDisplay->setReadOnly(true);
-    browseBtn = new QPushButton(QString::fromUtf8(obs_module_text("Browse")));
+    browseBtn = new QPushButton(QString::fromUtf8(obs_module_text("Browse")), settingsTab);
     pathLayout->addWidget(pathDisplay);
     pathLayout->addWidget(browseBtn);
     formLayout->addRow(QString::fromUtf8(obs_module_text("RecordPath")), pathLayout);
 
-    layout->addLayout(formLayout);
+    tabWidget->addTab(scrollArea, QString::fromUtf8("⚙️ Configurações"));
 
-    // ── Stream Controls ──
-    QHBoxLayout* streamBtnLayout = new QHBoxLayout();
-    toggleStreamBtn = new QPushButton(QString::fromUtf8(obs_module_text("StartStream")));
-    toggleStreamBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
-    statusLabel = new QLabel(QString::fromUtf8(obs_module_text("StatusOffline")));
-    statusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    QFont f = statusLabel->font();
-    f.setBold(true);
-    statusLabel->setFont(f);
-    
-    streamBtnLayout->addWidget(toggleStreamBtn, 2);
-    streamBtnLayout->addWidget(statusLabel, 3);
-    layout->addLayout(streamBtnLayout);
-
-    // ── Record Controls ──
-    QHBoxLayout* recordBtnLayout = new QHBoxLayout();
-    toggleRecordBtn = new QPushButton(QString::fromUtf8(obs_module_text("StartRecord")));
-    toggleRecordBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
-    recordStatusLabel = new QLabel(QString::fromUtf8(obs_module_text("StatusOffline")));
-    recordStatusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    recordStatusLabel->setFont(f);
-    
-    recordBtnLayout->addWidget(toggleRecordBtn, 2);
-    recordBtnLayout->addWidget(recordStatusLabel, 3);
-    layout->addLayout(recordBtnLayout);
-
-    layout->addStretch();
+    mainLayout->addWidget(tabWidget);
 
     connect(toggleStreamBtn, &QPushButton::clicked, this, &RadioDock::onToggleStreamClicked);
     connect(toggleRecordBtn, &QPushButton::clicked, this, &RadioDock::onToggleRecordClicked);
+    connect(toggleBothBtn, &QPushButton::clicked, this, &RadioDock::onToggleBothClicked);
     connect(browseBtn, &QPushButton::clicked, this, &RadioDock::onBrowseClicked);
 }
 
@@ -276,6 +321,48 @@ void RadioDock::onToggleRecordClicked() {
     }
 }
 
+void RadioDock::onToggleBothClicked() {
+    bool want_active = !streamingActive || !recordingActive;
+    
+    if (want_active) {
+        saveSettings();
+        streamingActive = true;
+        recordingActive = true;
+        streamStartTime = std::chrono::steady_clock::now();
+        recordStartTime = streamStartTime;
+
+        obs_data_t* out_settings = obs_output_get_settings(output);
+        if (!out_settings) {
+            out_settings = obs_data_create();
+        }
+        obs_data_set_int(out_settings, "protocol_type", protocolInput->currentIndex());
+        obs_data_set_string(out_settings, "server_url", urlInput->text().toUtf8().constData());
+        obs_data_set_int(out_settings, "server_port", portInput->value());
+        obs_data_set_string(out_settings, "mountpoint", mountInput->text().toUtf8().constData());
+        obs_data_set_string(out_settings, "username", userInput->text().toUtf8().constData());
+        obs_data_set_string(out_settings, "password", passInput->text().toUtf8().constData());
+        obs_data_set_int(out_settings, "bitrate", bitrateInput->currentText().toInt());
+        obs_data_set_bool(out_settings, "stream_active", true);
+        obs_data_set_bool(out_settings, "record_active", true);
+
+        QString baseDir = pathDisplay->text();
+        QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd-HH-mm-ss");
+        QString finalPath = QDir(baseDir).filePath(timestamp + ".mp3");
+        obs_data_set_string(out_settings, "record_path", finalPath.toUtf8().constData());
+
+        obs_output_update(output, out_settings);
+
+        if (!obs_output_active(output)) {
+            obs_output_start(output);
+        }
+        obs_data_release(out_settings);
+    } else {
+        streamingActive = false;
+        recordingActive = false;
+        obs_output_stop(output);
+    }
+}
+
 void RadioDock::updateStatus() {
     if (!output) return;
 
@@ -298,9 +385,9 @@ void RadioDock::updateStatus() {
         if (streamer && streamer->is_reconnecting()) {
             int attempt = streamer->get_reconnect_attempt();
             int max = streamer->get_reconnect_max();
-            QString text = QString::fromUtf8(obs_module_text("StatusReconnecting")) + QString(" (%1/%2)").arg(attempt).arg(max);
+            QString text = QString::fromUtf8("🟡 ") + QString::fromUtf8(obs_module_text("StatusReconnecting")) + QString(" (%1/%2)").arg(attempt).arg(max);
             statusLabel->setText(text);
-            statusLabel->setStyleSheet("color: #ffc107;");
+            statusLabel->setStyleSheet("font-size: 11pt; font-weight: bold; color: #ffc107;");
         } else {
             auto now = std::chrono::steady_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - streamStartTime).count();
@@ -309,22 +396,24 @@ void RadioDock::updateStatus() {
             int seconds = duration % 60;
             
             std::stringstream ss;
-            ss << obs_module_text("StatusLive") << " (" << std::setfill('0') << std::setw(2) << hours << ":" 
+            ss << "🟢 " << obs_module_text("StatusLive") << " (" << std::setfill('0') << std::setw(2) << hours << ":" 
                << std::setfill('0') << std::setw(2) << minutes << ":" 
                << std::setfill('0') << std::setw(2) << seconds << ")";
                
             statusLabel->setText(QString::fromStdString(ss.str()));
-            statusLabel->setStyleSheet("color: #28a745;");
+            statusLabel->setStyleSheet("font-size: 11pt; font-weight: bold; color: #28a745;");
         }
 
-        toggleStreamBtn->setText(QString::fromUtf8(obs_module_text("StopStream")));
-        toggleStreamBtn->setStyleSheet("background-color: #dc3545; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+        toggleStreamBtn->setText(QString::fromUtf8("📡 ") + QString::fromUtf8(obs_module_text("StopStream")));
+        toggleStreamBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 10pt; background-color: #a82e2e; color: white; border: none; border-radius: 4px; padding: 6px; } "
+                                       "QPushButton:hover { background-color: #c43b3b; }");
     } else {
-        statusLabel->setText(QString::fromUtf8(obs_module_text("StatusOffline")));
-        statusLabel->setStyleSheet("color: #dc3545;");
+        statusLabel->setText(QString::fromUtf8("⚪ ") + QString::fromUtf8(obs_module_text("StatusOffline")));
+        statusLabel->setStyleSheet("font-size: 11pt; font-weight: bold; color: #aaaaaa;");
 
-        toggleStreamBtn->setText(QString::fromUtf8(obs_module_text("StartStream")));
-        toggleStreamBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+        toggleStreamBtn->setText(QString::fromUtf8("📡 ") + QString::fromUtf8(obs_module_text("StartStream")));
+        toggleStreamBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 10pt; background-color: #2b753c; color: white; border: none; border-radius: 4px; padding: 6px; } "
+                                       "QPushButton:hover { background-color: #36944c; }");
     }
 
     // ── Update Record Status UI ──
@@ -336,21 +425,34 @@ void RadioDock::updateStatus() {
         int seconds = duration % 60;
         
         std::stringstream ss;
-        ss << obs_module_text("StatusRecording") << " (" << std::setfill('0') << std::setw(2) << hours << ":" 
+        ss << "🔴 " << obs_module_text("StatusRecording") << " (" << std::setfill('0') << std::setw(2) << hours << ":" 
            << std::setfill('0') << std::setw(2) << minutes << ":" 
            << std::setfill('0') << std::setw(2) << seconds << ")";
            
         recordStatusLabel->setText(QString::fromStdString(ss.str()));
-        recordStatusLabel->setStyleSheet("color: #28a745;");
+        recordStatusLabel->setStyleSheet("font-size: 11pt; font-weight: bold; color: #dc3545;");
 
-        toggleRecordBtn->setText(QString::fromUtf8(obs_module_text("StopRecord")));
-        toggleRecordBtn->setStyleSheet("background-color: #dc3545; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+        toggleRecordBtn->setText(QString::fromUtf8("🔴 ") + QString::fromUtf8(obs_module_text("StopRecord")));
+        toggleRecordBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 10pt; background-color: #a82e2e; color: white; border: none; border-radius: 4px; padding: 6px; } "
+                                       "QPushButton:hover { background-color: #c43b3b; }");
     } else {
-        recordStatusLabel->setText(QString::fromUtf8(obs_module_text("StatusOffline")));
-        recordStatusLabel->setStyleSheet("color: #dc3545;");
+        recordStatusLabel->setText(QString::fromUtf8("⚪ ") + QString::fromUtf8(obs_module_text("StatusOffline")));
+        recordStatusLabel->setStyleSheet("font-size: 11pt; font-weight: bold; color: #aaaaaa;");
 
-        toggleRecordBtn->setText(QString::fromUtf8(obs_module_text("StartRecord")));
-        toggleRecordBtn->setStyleSheet("background-color: #28a745; color: white; padding: 8px; font-weight: bold; border-radius: 4px;");
+        toggleRecordBtn->setText(QString::fromUtf8("🔴 ") + QString::fromUtf8(obs_module_text("StartRecord")));
+        toggleRecordBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 10pt; background-color: #2b753c; color: white; border: none; border-radius: 4px; padding: 6px; } "
+                                       "QPushButton:hover { background-color: #36944c; }");
+    }
+
+    // ── Update Both Status UI ──
+    if (streamingActive && recordingActive) {
+        toggleBothBtn->setText(QString::fromUtf8("⚡ ") + QString::fromUtf8(obs_module_text("StopBoth")));
+        toggleBothBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 10pt; background-color: #a82e2e; color: white; border: none; border-radius: 4px; padding: 6px; } "
+                                     "QPushButton:hover { background-color: #c43b3b; }");
+    } else {
+        toggleBothBtn->setText(QString::fromUtf8("⚡ ") + QString::fromUtf8(obs_module_text("StartBoth")));
+        toggleBothBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 10pt; background-color: #1a5c8a; color: white; border: none; border-radius: 4px; padding: 6px; } "
+                                     "QPushButton:hover { background-color: #2475ab; }");
     }
 
     bool running = streamingActive || recordingActive;

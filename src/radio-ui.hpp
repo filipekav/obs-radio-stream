@@ -24,6 +24,7 @@ public:
 private slots:
     void onToggleStreamClicked();
     void onToggleRecordClicked();
+    void onToggleBothClicked();
     void onBrowseClicked();
     void updateStatus();
     void onProtocolChanged(int index);
@@ -33,6 +34,9 @@ private:
     void loadSettings();
     void saveSettings();
 
+    class QTabWidget* tabWidget;
+
+    // Settings fields
     QLineEdit* urlInput;
     QComboBox* protocolInput;
     QSpinBox* portInput;
@@ -40,12 +44,13 @@ private:
     QLineEdit* userInput;
     QLineEdit* passInput;
     QComboBox* bitrateInput;
-
     QLineEdit* pathDisplay;
     QPushButton* browseBtn;
 
+    // Control fields
     QPushButton* toggleStreamBtn;
     QPushButton* toggleRecordBtn;
+    QPushButton* toggleBothBtn;
     QLabel* statusLabel;
     QLabel* recordStatusLabel;
 

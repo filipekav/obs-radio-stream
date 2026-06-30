@@ -1,4 +1,5 @@
 #include "radio-ui.hpp"
+#include "radio-streamer.hpp"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
